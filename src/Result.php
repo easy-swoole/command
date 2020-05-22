@@ -26,7 +26,7 @@ class Result implements ResultInterface
         return $this->result;
     }
 
-    function setMsg(string $msg)
+    function setMsg(?string $msg)
     {
         $this->msg = $msg;
     }

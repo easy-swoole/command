@@ -8,6 +8,6 @@ interface ResultInterface
 {
     function getResult();
     function setResult($result);
-    function setMsg(string $msg);
+    function setMsg(?string $msg);
     function getMsg():?string ;
 }
