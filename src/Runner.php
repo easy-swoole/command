@@ -26,7 +26,7 @@ class Runner
 
     function run(CallerInterface $caller):?ResultInterface
     {
-        $run = $this->container->get($caller->commandName());
+        $run = $this->container->get($caller->getCommand());
         if($run){
             return $run->exec($caller);
         }
@@ -35,7 +35,7 @@ class Runner
 
     function help(CallerInterface $caller):?ResultInterface
     {
-        $run = $this->container->get($caller->commandName());
+        $run = $this->container->get($caller->getCommand());
         if($run){
             return $run->help($caller);
         }

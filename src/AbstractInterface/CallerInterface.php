@@ -6,6 +6,8 @@ namespace EasySwoole\Command\AbstractInterface;
 
 interface CallerInterface
 {
-    public function commandName():string;
-    public function params();
+    public function getCommand():string;
+    public function setCommand(string $command);
+    public function setParams($params);
+    public function getParams();
 }
