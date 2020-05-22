@@ -28,7 +28,7 @@ class Runner
     {
         $run = $this->container->get($caller->getCommand());
         if($run){
-            return $run->exec($caller);
+            return $run->exec($caller->getParams());
         }
         return null;
     }
@@ -37,7 +37,7 @@ class Runner
     {
         $run = $this->container->get($caller->getCommand());
         if($run){
-            return $run->help($caller);
+            return $run->help($caller->getParams());
         }
         return null;
     }
