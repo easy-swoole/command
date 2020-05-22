@@ -6,6 +6,8 @@ namespace EasySwoole\Command\AbstractInterface;
 
 interface ResultInterface
 {
-    function result();
-    function __toString();
+    function getResult();
+    function setResult($result);
+    function setMsg(string $msg);
+    function getMsg():?string ;
 }
