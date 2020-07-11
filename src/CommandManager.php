@@ -103,7 +103,7 @@ class CommandManager
         }
 
         if (!array_key_exists($command, $this->commands)) {
-            return "The command '{$command}' is not exists!" . PHP_EOL;
+            return Color::red("The command '{$command}' is not exists!\n");
         }
 
         if (isset($this->opts['h']) || isset($this->opts['help'])) {
@@ -192,12 +192,12 @@ class CommandManager
 
         $fullCmd = $this->script . " $command";
 
-        $desc = $handler->desc();
+        $desc = Color::brown($handler->desc());
         $usage = "$fullCmd [args ...] [--opts ...]";
 
         $nodes = [
             $desc ? ucfirst($desc) : 'No description for the command',
-            "Usage:\n  $usage\n\nExamples:",
+            Color::brown('Usage:') . "\n  $usage\n\n".Color::brown('Examples:'),
         ];
 
         $userHelp = $handler->help();
@@ -217,9 +217,9 @@ class CommandManager
 
         // help
         $desc = ucfirst($this->metas['desc']) . "\n";
-        $usage = "{$this->script} COMMAND -h";
+        $usage = Color::cyan("{$this->script} COMMAND -h");
 
-        $help = $desc . "Usage: $usage\nCommands:\n";
+        $help = Color::brown($desc) . Color::brown('Usage:') . " $usage\n" . Color::brown('Commands:') . "\n";
         $data = $this->commands;
         ksort($data);
 
@@ -228,12 +228,12 @@ class CommandManager
          * @var CommandInterface $handler
          */
         foreach ($data as $command => $handler) {
-            $command = str_pad($command, $this->width, ' ');
+            $command = Color::brown(str_pad($command, $this->width, ' '));
             $desc = $handler->desc() ? ucfirst($handler->desc()) : 'No description for the command';
             $help .= "  $command  $desc\n";
         }
 
-        $help .= "\nFor command usage please run: {$this->script} COMMAND -h";
+        $help .= "\nFor command usage please run: $usage";
 
         return $help . PHP_EOL;
     }
