@@ -193,7 +193,7 @@ class CommandManager
                 $text .= "  $key\n";
             }
         }
-        return Color::red($text);
+        return Color::danger($text);
     }
 
     private function displayCommandHelp($command)

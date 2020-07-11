@@ -19,6 +19,14 @@ namespace EasySwoole\Command;
  * @method static string yellow(string $text)
  * @method static string magenta(string $text)
  * @method static string white(string $text)
+ * @method static string success(string $text)
+ * @method static string info(string $text)
+ * @method static string comment(string $text)
+ * @method static string note(string $text)
+ * @method static string notice(string $text)
+ * @method static string warning(string $text)
+ * @method static string error(string $text)
+ * @method static string danger(string $text)
  */
 class Color
 {
@@ -33,6 +41,15 @@ class Color
         'yellow' => '1;33',
         'magenta' => '1;35',
         'white' => '1;37',
+
+        'success'     => '1;32',
+        'info'        => '0;32',
+        'comment'     => '0;33',
+        'note'        => '36;1',
+        'notice'      => '36;4',
+        'warning'     => '0;30;43',
+        'danger'      => '0;31',
+        'error'       => '97;41',
     ];
 
     public const COLOR_TPL = "\033[%sm%s\e[0m";
