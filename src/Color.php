@@ -37,6 +37,7 @@ class Color
 
     public const COLOR_TPL = "\033[%sm%s\e[0m";
 
+    public const MATCH_TAG = '/<([a-zA-Z=;_]+)>(.*?)<\/\\1>/s';
 
     /**
      * @param string $method
@@ -59,7 +60,43 @@ class Color
      */
     public static function render(string $text, $style = null): string
     {
-        $color = self::STYLES[$style] ?? 0;
-        return sprintf(self::COLOR_TPL, $color, $text);
+
+        if ($style == null || empty($style)) {
+            return self::parseTag($text);
+        } else {
+            $color = self::STYLES[$style] ?? 0;
+            return sprintf(self::COLOR_TPL, $color, $text);
+        }
+    }
+
+    /**
+     * @param string $text
+     * @return string
+     */
+    public static function parseTag(string $text): string
+    {
+        if (!$text || false === strpos($text, '</')) {
+            return $text;
+        }
+
+        if (!preg_match_all(self::MATCH_TAG, $text, $matches)) {
+            return $text;
+        }
+
+        $messages = current($matches);
+        $tags = next($matches);
+        $values = next($matches);
+
+        foreach ($messages as $k => $message) {
+            $style = self::STYLES[$tags[$k]] ?? null;
+            if (is_null($style)) continue;
+
+            $tag = $tags[$k];
+            $value = $values[$k];
+            $repl = sprintf(self::COLOR_TPL, $style, $value);
+            $text = str_replace("<$tag>$value</$tag>", $repl, $text);
+        }
+
+        return $text;
     }
 }

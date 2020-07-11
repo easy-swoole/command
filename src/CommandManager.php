@@ -192,12 +192,13 @@ class CommandManager
 
         $fullCmd = $this->script . " $command";
 
-        $desc = Color::brown($handler->desc());
+        $desc = $handler->desc() ? ucfirst($handler->desc()) : 'No description for the command';
+        $desc = "<brown>$desc</brown>";
         $usage = "$fullCmd [args ...] [--opts ...]";
 
         $nodes = [
-            $desc ? ucfirst($desc) : 'No description for the command',
-            Color::brown('Usage:') . "\n  $usage\n\n".Color::brown('Examples:'),
+            $desc,
+            "<brown>Usage:</brown>" . "\n  $usage\n\n",
         ];
 
         $userHelp = $handler->help();
@@ -206,20 +207,19 @@ class CommandManager
             return "  $fullCmd $v\n";
         }, $userHelp);
 
-        $help = implode("\n", $nodes) . "\n" . implode("", $userHelp);
+        $help = implode("\n", $nodes) . "<brown>Examples:</brown>\n" . implode("", $userHelp);
 
 
-        return $help . PHP_EOL;
+        return Color::render($help) . PHP_EOL;
     }
 
     private function displayHelp()
     {
-
         // help
         $desc = ucfirst($this->metas['desc']) . "\n";
-        $usage = Color::cyan("{$this->script} COMMAND -h");
+        $usage = "<cyan>{$this->script} COMMAND -h</cyan>";
 
-        $help = Color::brown($desc) . Color::brown('Usage:') . " $usage\n" . Color::brown('Commands:') . "\n";
+        $help = "<brown>{$desc}Usage:</brown>" . " $usage\n<brown>Commands:</brown>\n";
         $data = $this->commands;
         ksort($data);
 
@@ -228,14 +228,14 @@ class CommandManager
          * @var CommandInterface $handler
          */
         foreach ($data as $command => $handler) {
-            $command = Color::brown(str_pad($command, $this->width, ' '));
+            $command = str_pad($command, $this->width, ' ');
             $desc = $handler->desc() ? ucfirst($handler->desc()) : 'No description for the command';
-            $help .= "  $command  $desc\n";
+            $help .= "  <brown>$command</brown>  $desc\n";
         }
 
         $help .= "\nFor command usage please run: $usage";
 
-        return $help . PHP_EOL;
+        return Color::render($help) . PHP_EOL;
     }
 
     /**
