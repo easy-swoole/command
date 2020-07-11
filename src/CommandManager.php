@@ -103,7 +103,7 @@ class CommandManager
         }
 
         if (!array_key_exists($command, $this->commands)) {
-            return Color::red("The command '{$command}' is not exists!\n");
+            return $this->displayAlternativesHelp($command);
         }
 
         if (isset($this->opts['h']) || isset($this->opts['help'])) {
@@ -183,6 +183,17 @@ class CommandManager
             $this->width = $len;
         }
 
+    }
+
+    private function displayAlternativesHelp($command): string
+    {
+        $text = "The command '{$command}' is not exists!\nDid you mean one of these?\n";
+        foreach (array_keys($this->commands) as $key) {
+            if (strpos($key, $command) !== false) {
+                $text .= "  $key\n";
+            }
+        }
+        return Color::red($text);
     }
 
     private function displayCommandHelp($command)
