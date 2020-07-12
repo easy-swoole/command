@@ -10,7 +10,7 @@ interface CommandInterface
 
     public function exec(): string;
 
-    public function help(): array;
+    public function help(CommandHelpInterface $commandHelp): CommandHelpInterface;
 
     public function desc(): string;
 }
