@@ -15,12 +15,10 @@ class CommandManager
     use Singleton;
 
     /**
-     * default metas
+     * desc
+     * @var string
      */
-    private $metas = [
-        'name' => 'EasySwoole Command',
-        'desc' => 'Welcome To EasySwoole Command Console!'
-    ];
+    private $desc = 'Welcome To EasySwoole Command Console!';
 
     /**
      * a b framework=easyswoole
@@ -112,7 +110,11 @@ class CommandManager
 
         /** @var CommandInterface $handler */
         $handler = $this->commands[$command];
-        return $handler->exec();
+        if (!($result = $handler->exec())) {
+            return $this->displayCommandHelp($command);
+        }
+
+        return $result;
     }
 
 
@@ -166,14 +168,6 @@ class CommandManager
         }
     }
 
-    /**
-     * @param array $metas
-     */
-    public function setMetas(array $metas)
-    {
-        $this->metas = array_merge($this->metas, $metas);
-    }
-
     public function addCommand(CommandInterface $handler)
     {
         $command = $handler->commandName();
@@ -205,29 +199,51 @@ class CommandManager
 
         $desc = $handler->desc() ? ucfirst($handler->desc()) : 'No description for the command';
         $desc = "<brown>$desc</brown>";
-        $usage = "$fullCmd [args ...] [--opts ...]";
+        $usage = "$fullCmd <cyan>COMMAND</cyan> [--opts ...]";
 
         $nodes = [
             $desc,
-            "<brown>Usage:</brown>" . "\n  $usage\n\n",
+            "<brown>Usage:</brown>" . "\n  $usage\n",
         ];
 
-        $userHelp = $handler->help();
+        $helpMsg = implode("\n", $nodes);
 
-        $userHelp = array_map(function ($v) use ($fullCmd) {
-            return "  $fullCmd $v\n";
-        }, $userHelp);
+        /**-----------------CommandHelp--------------------------------*/
 
-        $help = implode("\n", $nodes) . "<brown>Examples:</brown>\n" . implode("", $userHelp);
+        /** @var CommandHelp $commandHelp */
+        $commandHelp = $handler->help(new CommandHelp());
+
+        $helpMsg .= "\n<brown>Commands:</brown>\n";
 
 
-        return Color::render($help) . PHP_EOL;
+        $commands = $commandHelp->getCommands();
+        $commandWidth = $commandHelp->getCommandWidth();
+
+        if (empty($commands)) $helpMsg .= "\n";
+        foreach ($commands as $name => $desc) {
+            $name = str_pad($name, $commandWidth, ' ');
+            $helpMsg .= "  <green>$name</green>  $desc\n";
+        }
+
+        $helpMsg .= "\n<brown>Options:</brown>\n";
+
+        $opts = $commandHelp->getOpts();
+        $optWidth = $commandHelp->getOptWidth();
+
+        foreach ($opts as $name => $desc) {
+            $name = str_pad($name, $optWidth, ' ');
+            $helpMsg .= "  <green>$name</green>  $desc\n";
+        }
+
+        /**-----------------CommandHelp--------------------------------*/
+
+        return Color::render($helpMsg) . PHP_EOL;
     }
 
     private function displayHelp()
     {
         // help
-        $desc = ucfirst($this->metas['desc']) . "\n";
+        $desc = ucfirst($this->desc) . "\n";
         $usage = "<cyan>{$this->script} COMMAND -h</cyan>";
 
         $help = "<brown>{$desc}Usage:</brown>" . " $usage\n<brown>Commands:</brown>\n";
@@ -320,6 +336,5 @@ class CommandManager
     {
         return isset($this->opts[$name]);
     }
-
 
 }
