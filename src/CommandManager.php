@@ -147,6 +147,8 @@ class CommandManager
                         [$option, $value] = explode('=', $option, 2);
                     }
 
+                } else if (strpos($option, '=') !== false) {
+                    [$option, $value] = explode('=', $option, 2);
                 }
 
                 $this->opts[$option] = $value;
@@ -273,7 +275,7 @@ class CommandManager
         foreach ($data as $command => $handler) {
             $command = str_pad($command, $this->width, ' ');
             $desc = $handler->desc() ? ucfirst($handler->desc()) : 'No description for the command';
-            $help .= "  <brown>$command</brown>  $desc\n";
+            $help .= "  <green>$command</green>  $desc\n";
         }
 
         $help .= "\nFor command usage please run: $usage";
@@ -350,7 +352,7 @@ class CommandManager
      */
     public function issetOpt($name)
     {
-        return array_key_exists($name,$this->opts);
+        return array_key_exists($name, $this->opts);
     }
 
 }
