@@ -9,7 +9,7 @@ namespace EasySwoole\Command\AbstractInterface;
 
 interface CommandHelpInterface
 {
-    public function addCommand(string $name, string $desc);
+    public function addAction(string $actionName, string $desc);
 
-    public function addOpt(string $name, string $desc);
+    public function addActionOpt(string $actionOptName, string $desc);
 }
