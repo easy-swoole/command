@@ -335,7 +335,7 @@ class CommandManager
     }
 
     /**
-     * @param $name
+     * @param string|int $name
      * @return bool
      */
     public function issetArg($name)
@@ -350,7 +350,7 @@ class CommandManager
      */
     public function issetOpt($name)
     {
-        return isset($this->opts[$name]);
+        return array_key_exists($name,$this->opts);
     }
 
 }
