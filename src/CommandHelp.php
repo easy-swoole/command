@@ -14,7 +14,7 @@ class CommandHelp implements CommandHelpInterface
     /**
      * @var array
      */
-    protected $commands = [];
+    protected $actions = [];
 
     /**
      * @var array
@@ -24,27 +24,27 @@ class CommandHelp implements CommandHelpInterface
     /**
      * @var int
      */
-    protected $commandWidth = 1;
+    protected $actionWidth = 1;
 
     /**
      * @var int
      */
     protected $optWidth = 1;
 
-    public function addCommand(string $name, string $desc)
+    public function addAction(string $actionName, string $desc)
     {
-        $this->commands[$name] = $desc;
+        $this->actions[$actionName] = $desc;
 
-        if (($len = strlen($name)) > $this->commandWidth) {
+        if (($len = strlen($actionName)) > $this->actionWidth) {
             $this->commandWidth = $len;
         }
     }
 
-    public function addOpt(string $name, string $desc)
+    public function addActionOpt(string $actionOptName, string $desc)
     {
-        $this->opts[$name] = $desc;
+        $this->opts[$actionOptName] = $desc;
 
-        if (($len = strlen($name)) > $this->optWidth) {
+        if (($len = strlen($actionOptName)) > $this->optWidth) {
             $this->optWidth = $len;
         }
     }
@@ -52,9 +52,9 @@ class CommandHelp implements CommandHelpInterface
     /**
      * @return array
      */
-    public function getCommands(): array
+    public function getActions(): array
     {
-        return $this->commands;
+        return $this->actions;
     }
 
     /**
@@ -68,9 +68,9 @@ class CommandHelp implements CommandHelpInterface
     /**
      * @return int
      */
-    public function getCommandWidth(): int
+    public function getActionWidth(): int
     {
-        return $this->commandWidth;
+        return $this->actionWidth;
     }
 
     /**

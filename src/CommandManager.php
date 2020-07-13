@@ -136,7 +136,7 @@ class CommandManager
 
             // first str eq - this is option
             if ($param[0] === '-') {
-                $value = true;
+                $value = null;
                 $option = substr($param, 1);
 
                 // --config=dev
@@ -181,12 +181,28 @@ class CommandManager
 
     private function displayAlternativesHelp($command): string
     {
-        $text = "The command '{$command}' is not exists!\nDid you mean one of these?\n";
-        foreach (array_keys($this->commands) as $key) {
-            if (strpos($key, $command) !== false) {
-                $text .= "  $key\n";
+        $text = "The command '{$command}' is not exists!\n";
+        $commandNames = array_keys($this->commands);
+        $alternatives = [];
+        foreach ($commandNames as $commandName) {
+            $lev = levenshtein($command, $commandName);
+            if ($lev <= strlen($command) / 3 || false !== strpos($commandName, $command)) {
+                $alternatives[$commandName] = $lev;
             }
         }
+        $threshold = 1e3;
+        $alternatives = array_filter($alternatives, function ($lev) use ($threshold) {
+            return $lev < 2 * $threshold;
+        });
+        ksort($alternatives);
+
+        if ($alternatives) {
+            $text .= "Did you mean one of these?\n";
+            foreach (array_keys($alternatives) as $alternative) {
+                $text .= "$alternative\n";
+            }
+        }
+
         return Color::danger($text);
     }
 
@@ -199,7 +215,7 @@ class CommandManager
 
         $desc = $handler->desc() ? ucfirst($handler->desc()) : 'No description for the command';
         $desc = "<brown>$desc</brown>";
-        $usage = "$fullCmd <cyan>COMMAND</cyan> [--opts ...]";
+        $usage = "$fullCmd <cyan>ACTION</cyan> [--opts ...]";
 
         $nodes = [
             $desc,
@@ -213,15 +229,15 @@ class CommandManager
         /** @var CommandHelp $commandHelp */
         $commandHelp = $handler->help(new CommandHelp());
 
-        $helpMsg .= "\n<brown>Commands:</brown>\n";
+        $helpMsg .= "\n<brown>Actions:</brown>\n";
 
 
-        $commands = $commandHelp->getCommands();
-        $commandWidth = $commandHelp->getCommandWidth();
+        $actions = $commandHelp->getActions();
+        $actionWidth = $commandHelp->getActionWidth();
 
-        if (empty($commands)) $helpMsg .= "\n";
-        foreach ($commands as $name => $desc) {
-            $name = str_pad($name, $commandWidth, ' ');
+        if (empty($actions)) $helpMsg .= "\n";
+        foreach ($actions as $name => $desc) {
+            $name = str_pad($name, $actionWidth, ' ');
             $helpMsg .= "  <green>$name</green>  $desc\n";
         }
 
