@@ -58,12 +58,11 @@ class Custom implements \EasySwoole\Command\AbstractInterface\CommandInterface
         return '自定义命令行执行方法';
     }
 
-    public function help(): array
+    public function help(\EasySwoole\Command\AbstractInterface\CommandHelpInterface $commandHelp): \EasySwoole\Command\AbstractInterface\CommandHelpInterface
     {
-        // 返回数组形式
-        return [
-            'custom test 这是一个测试'
-        ];
+        $commandHelp->addAction('test','测试方法');
+        $commandHelp->addActionOpt('-no','不输出详细信息');
+        return $commandHelp;
     }
 }
 ```
