@@ -100,12 +100,12 @@ class CommandManager
             return $this->displayHelp();
         }
 
-        if (!array_key_exists($command, $this->commands)) {
-            return $this->displayAlternativesHelp($command);
+        if ($this->issetOpt('h') || $this->issetOpt('help')) {
+            return $this->displayCommandHelp($command);
         }
 
-        if (isset($this->opts['h']) || isset($this->opts['help'])) {
-            return $this->displayCommandHelp($command);
+        if (!array_key_exists($command, $this->commands)) {
+            return $this->displayAlternativesHelp($command);
         }
 
         /** @var CommandInterface $handler */
