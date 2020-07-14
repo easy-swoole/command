@@ -151,15 +151,17 @@ class CommandManager
                     [$option, $value] = explode('=', $option, 2);
                 }
 
-                $this->opts[$option] = $value;
+                if ($option) {
+                    $this->opts[$option] = $value;
+                }
 
-            } elseif (isset($option[1]) && $option[1] === '=') {
-                [$option, $value] = explode('=', $option, 2);
-                $this->opts[$option] = $value;
             }
 
             // 存在 属于option
-            if (isset($option) && isset($value)) continue;
+            if (isset($option)) {
+                unset($option);
+                continue;
+            }
 
             if (strpos($param, '=') !== false) {
                 [$name, $value] = explode('=', $param, 2);
