@@ -100,12 +100,12 @@ class CommandManager
             return $this->displayHelp();
         }
 
-        if (!array_key_exists($command, $this->commands)) {
-            return $this->displayAlternativesHelp($command);
+        if ($this->issetOpt('h') || $this->issetOpt('help')) {
+            return $this->displayCommandHelp($command);
         }
 
-        if (isset($this->opts['h']) || isset($this->opts['help'])) {
-            return $this->displayCommandHelp($command);
+        if (!array_key_exists($command, $this->commands)) {
+            return $this->displayAlternativesHelp($command);
         }
 
         /** @var CommandInterface $handler */
@@ -147,17 +147,21 @@ class CommandManager
                         [$option, $value] = explode('=', $option, 2);
                     }
 
+                } else if (strpos($option, '=') !== false) {
+                    [$option, $value] = explode('=', $option, 2);
                 }
 
-                $this->opts[$option] = $value;
+                if ($option) {
+                    $this->opts[$option] = $value;
+                }
 
-            } elseif (isset($option[1]) && $option[1] === '=') {
-                [$option, $value] = explode('=', $option, 2);
-                $this->opts[$option] = $value;
             }
 
             // 存在 属于option
-            if (isset($option) && isset($value)) continue;
+            if (isset($option)) {
+                unset($option);
+                continue;
+            }
 
             if (strpos($param, '=') !== false) {
                 [$name, $value] = explode('=', $param, 2);
@@ -273,7 +277,7 @@ class CommandManager
         foreach ($data as $command => $handler) {
             $command = str_pad($command, $this->width, ' ');
             $desc = $handler->desc() ? ucfirst($handler->desc()) : 'No description for the command';
-            $help .= "  <brown>$command</brown>  $desc\n";
+            $help .= "  <green>$command</green>  $desc\n";
         }
 
         $help .= "\nFor command usage please run: $usage";
@@ -350,7 +354,7 @@ class CommandManager
      */
     public function issetOpt($name)
     {
-        return array_key_exists($name,$this->opts);
+        return array_key_exists($name, $this->opts);
     }
 
 }

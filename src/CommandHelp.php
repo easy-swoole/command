@@ -36,7 +36,7 @@ class CommandHelp implements CommandHelpInterface
         $this->actions[$actionName] = $desc;
 
         if (($len = strlen($actionName)) > $this->actionWidth) {
-            $this->commandWidth = $len;
+            $this->actionWidth = $len;
         }
     }
 
