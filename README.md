@@ -31,7 +31,7 @@ class Custom implements \EasySwoole\Command\AbstractInterface\CommandInterface
         /**
          * 获取选项
          * 比如 --config=dev -d
-         * 处理之后就是['config' => 'dev', 'd' => NULL]
+         * 处理之后就是['config' => 'dev', 'd' => true]
          */
         \EasySwoole\Command\CommandManager::getInstance()->getOpts();
 
