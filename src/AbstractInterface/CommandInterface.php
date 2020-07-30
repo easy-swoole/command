@@ -8,7 +8,7 @@ interface CommandInterface
 {
     public function commandName(): string;
 
-    public function exec(): string;
+    public function exec(): ?string;
 
     public function help(CommandHelpInterface $commandHelp): CommandHelpInterface;
 
