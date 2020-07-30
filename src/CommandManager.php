@@ -7,6 +7,7 @@
 namespace EasySwoole\Command;
 
 
+use EasySwoole\Command\AbstractInterface\CallerInterface;
 use EasySwoole\Command\AbstractInterface\CommandInterface;
 use EasySwoole\Component\Singleton;
 
@@ -61,38 +62,26 @@ class CommandManager
     private $originArgv = [];
 
     /**
-     * CommandManager constructor.
-     */
-    public function __construct()
-    {
-
-    }
-
-    /**
-     * @param array $argv
-     */
-    private function init(array $argv = [])
-    {
-        $this->originArgv = $argv;
-        // script
-        $script = array_shift($argv);
-        $this->script = $script;
-
-        // command
-        $command = array_shift($argv);
-        $this->command = $command;
-
-        $this->parseArgv(array_values($argv));
-    }
-
-    /**
-     * @param array $argv
+     * @param CallerInterface $caller
      * @return string
      */
-    public function run(array $argv = []): string
+    public function run(CallerInterface $caller): ?string
     {
-        $this->init($argv);
-        if (!$command = $this->command) {
+        $argv = $this->originArgv = $caller->getParams();
+
+        // remove script command
+        array_shift($argv);
+        array_shift($argv);
+
+        // script
+        $this->script = $caller->getScript();
+
+        // command
+        $this->command = $caller->getCommand();
+
+        $this->parseArgv(array_values($argv));
+
+        if (!($command = $this->command)) {
             return $this->displayHelp();
         }
 
@@ -110,11 +99,8 @@ class CommandManager
 
         /** @var CommandInterface $handler */
         $handler = $this->commands[$command];
-        if (!($result = $handler->exec())) {
-            return $this->displayCommandHelp($command);
-        }
 
-        return $result;
+        return $handler->exec();
     }
 
 
@@ -183,7 +169,7 @@ class CommandManager
 
     }
 
-    private function displayAlternativesHelp($command): string
+    public function displayAlternativesHelp($command): string
     {
         $text = "The command '{$command}' is not exists!\n";
         $commandNames = array_keys($this->commands);
@@ -210,10 +196,12 @@ class CommandManager
         return Color::danger($text);
     }
 
-    private function displayCommandHelp($command)
+    public function displayCommandHelp($command)
     {
         /** @var CommandInterface $handler */
-        $handler = $this->commands[$command];
+        $handler = $this->commands[$command] ?? '';
+        if (!$handler) return Color::danger("The command '{$command}' is not exists!\n");
+
 
         $fullCmd = $this->script . " $command";
 
@@ -260,7 +248,7 @@ class CommandManager
         return Color::render($helpMsg) . PHP_EOL;
     }
 
-    private function displayHelp()
+    public function displayHelp()
     {
         // help
         $desc = ucfirst($this->desc) . "\n";

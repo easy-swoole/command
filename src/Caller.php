@@ -8,6 +8,7 @@ use EasySwoole\Command\AbstractInterface\CallerInterface;
 
 class Caller implements CallerInterface
 {
+    private $script;
     private $command;
     private $params;
 
@@ -18,7 +19,7 @@ class Caller implements CallerInterface
 
     public function setCommand(string $command)
     {
-       $this->command = $command;
+        $this->command = $command;
     }
 
     public function setParams($params)
@@ -31,4 +32,13 @@ class Caller implements CallerInterface
         return $this->params;
     }
 
+    public function setScript(string $script)
+    {
+        $this->script = $script;
+    }
+
+    public function getScript(): string
+    {
+        return $this->script;
+    }
 }
