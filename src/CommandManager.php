@@ -78,6 +78,7 @@ class CommandManager
         $this->command = $caller->getCommand();
 
         $this->parseArgv(array_values($argv));
+        var_dump($this->opts,$this->args);exit(123);
 
         if (!($command = $this->command)) {
             return $this->displayHelp();
@@ -123,14 +124,11 @@ class CommandManager
                     [$option, $value] = explode('=', $option, 2);
                 }
                 $this->opts[$option] = $value;
-            } else {
-                $name  = $param;
-                // 便于无等号参数调用getArg获取
-                $value = true;
-                if (strpos($param, '=') !== false) {
-                    [$name, $value] = explode('=', $param, 2);
-                }
+            } else if (strpos($param, '=') !== false) {
+                [$name, $value] = explode('=', $param, 2);
                 $this->args[$name] = $value;
+            } else {
+                $this->args[] = $param;
             }
         }
     }
