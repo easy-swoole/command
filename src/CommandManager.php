@@ -3,9 +3,7 @@
  * @author gaobinzhan <gaobinzhan@gmail.com>
  */
 
-
 namespace EasySwoole\Command;
-
 
 use EasySwoole\Command\AbstractInterface\CallerInterface;
 use EasySwoole\Command\AbstractInterface\CommandInterface;
@@ -103,7 +101,6 @@ class CommandManager
         return $handler->exec();
     }
 
-
     /**
      * @return array
      */
@@ -119,41 +116,21 @@ class CommandManager
     {
         while (false !== ($param = current($params))) {
             next($params);
-
-            // first str eq - this is option
-            if ($param[0] === '-') {
-                $value = null;
-                $option = substr($param, 1);
-
-                // --config=dev
-                if (strpos($option, '-') === 0) {
-                    $option = substr($option, 1);
-
-                    if (strpos($option, '=') !== false) {
-                        [$option, $value] = explode('=', $option, 2);
-                    }
-
-                } else if (strpos($option, '=') !== false) {
+            if (strpos($param, '-') === 0) {
+                $option = ltrim($param, '-');
+                $value  = null;
+                if (strpos($option, '=') !== false) {
                     [$option, $value] = explode('=', $option, 2);
                 }
-
-                if ($option) {
-                    $this->opts[$option] = $value;
-                }
-
-            }
-
-            // 存在 属于option
-            if (isset($option)) {
-                unset($option);
-                continue;
-            }
-
-            if (strpos($param, '=') !== false) {
-                [$name, $value] = explode('=', $param, 2);
-                $this->args[$name] = $value;
+                $this->opts[$option] = $value;
             } else {
-                $this->args[] = $param;
+                $name  = $param;
+                // 便于无等号参数调用getArg获取
+                $value = true;
+                if (strpos($param, '=') !== false) {
+                    [$name, $value] = explode('=', $param, 2);
+                }
+                $this->args[$name] = $value;
             }
         }
     }
@@ -161,6 +138,7 @@ class CommandManager
     public function addCommand(CommandInterface $handler)
     {
         $command = $handler->commandName();
+
         $this->commands[$command] = $handler;
 
         if (($len = strlen($command)) > $this->width) {
@@ -171,7 +149,7 @@ class CommandManager
 
     public function displayAlternativesHelp($command): string
     {
-        $text = "The command '{$command}' is not exists!\n";
+        $text         = "The command '{$command}' is not exists!\n";
         $commandNames = array_keys($this->commands);
         $alternatives = [];
         foreach ($commandNames as $commandName) {
@@ -180,7 +158,7 @@ class CommandManager
                 $alternatives[$commandName] = $lev;
             }
         }
-        $threshold = 1e3;
+        $threshold    = 1e3;
         $alternatives = array_filter($alternatives, function ($lev) use ($threshold) {
             return $lev < 2 * $threshold;
         });
@@ -202,11 +180,10 @@ class CommandManager
         $handler = $this->commands[$command] ?? '';
         if (!$handler) return Color::danger("The command '{$command}' is not exists!\n");
 
-
         $fullCmd = $this->script . " $command";
 
-        $desc = $handler->desc() ? ucfirst($handler->desc()) : 'No description for the command';
-        $desc = "<brown>$desc</brown>";
+        $desc  = $handler->desc() ? ucfirst($handler->desc()) : 'No description for the command';
+        $desc  = "<brown>$desc</brown>";
         $usage = "$fullCmd <cyan>ACTION</cyan> [--opts ...]";
 
         $nodes = [
@@ -223,23 +200,22 @@ class CommandManager
 
         $helpMsg .= "\n<brown>Actions:</brown>\n";
 
-
-        $actions = $commandHelp->getActions();
+        $actions     = $commandHelp->getActions();
         $actionWidth = $commandHelp->getActionWidth();
 
         if (empty($actions)) $helpMsg .= "\n";
         foreach ($actions as $name => $desc) {
-            $name = str_pad($name, $actionWidth, ' ');
+            $name    = str_pad($name, $actionWidth, ' ');
             $helpMsg .= "  <green>$name</green>  $desc\n";
         }
 
         $helpMsg .= "\n<brown>Options:</brown>\n";
 
-        $opts = $commandHelp->getOpts();
+        $opts     = $commandHelp->getOpts();
         $optWidth = $commandHelp->getOptWidth();
 
         foreach ($opts as $name => $desc) {
-            $name = str_pad($name, $optWidth, ' ');
+            $name    = str_pad($name, $optWidth, ' ');
             $helpMsg .= "  <green>$name</green>  $desc\n";
         }
 
@@ -251,7 +227,7 @@ class CommandManager
     public function displayHelp()
     {
         // help
-        $desc = ucfirst($this->desc) . "\n";
+        $desc  = ucfirst($this->desc) . "\n";
         $usage = "<cyan>{$this->script} COMMAND -h</cyan>";
 
         $help = "<brown>{$desc}Usage:</brown>" . " $usage\n<brown>Commands:</brown>\n";
@@ -264,8 +240,8 @@ class CommandManager
          */
         foreach ($data as $command => $handler) {
             $command = str_pad($command, $this->width, ' ');
-            $desc = $handler->desc() ? ucfirst($handler->desc()) : 'No description for the command';
-            $help .= "  <green>$command</green>  $desc\n";
+            $desc    = $handler->desc() ? ucfirst($handler->desc()) : 'No description for the command';
+            $help    .= "  <green>$command</green>  $desc\n";
         }
 
         $help .= "\nFor command usage please run: $usage";
