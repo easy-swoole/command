@@ -78,7 +78,6 @@ class CommandManager
         $this->command = $caller->getCommand();
 
         $this->parseArgv(array_values($argv));
-        var_dump($this->opts,$this->args);exit(123);
 
         if (!($command = $this->command)) {
             return $this->displayHelp();
