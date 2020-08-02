@@ -122,10 +122,10 @@ class CommandManager
                 if (strpos($option, '=') !== false) {
                     [$option, $value] = explode('=', $option, 2);
                 }
-                $this->opts[$option] = $value;
+                if ($option) $this->opts[$option] = $value;
             } else if (strpos($param, '=') !== false) {
                 [$name, $value] = explode('=', $param, 2);
-                $this->args[$name] = $value;
+                if ($name) $this->args[$name] = $value;
             } else {
                 $this->args[] = $param;
             }
