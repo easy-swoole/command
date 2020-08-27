@@ -177,7 +177,7 @@ class CommandManager
         $handler = $this->commands[$command] ?? '';
         if (!$handler) return Color::danger("The command '{$command}' is not exists!\n");
 
-        $fullCmd = $this->script . " $command";
+        $fullCmd = $this->script . " " . $handler->commandName();
 
         $desc  = $handler->desc() ? ucfirst($handler->desc()) : 'No description for the command';
         $desc  = "<brown>$desc</brown>";
@@ -185,7 +185,7 @@ class CommandManager
 
         $nodes = [
             $desc,
-            "<brown>Usage:</brown>" . "\n  $usage\n",
+            "\n<brown>Usage:</brown>" . "\n  $usage\n",
         ];
 
         $helpMsg = implode("\n", $nodes);
