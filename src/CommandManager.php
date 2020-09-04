@@ -166,6 +166,8 @@ class CommandManager
             foreach (array_keys($alternatives) as $alternative) {
                 $text .= "$alternative\n";
             }
+        } else {
+            $text .= $this->displayHelp();
         }
 
         return Color::danger($text);
@@ -175,7 +177,11 @@ class CommandManager
     {
         /** @var CommandInterface $handler */
         $handler = $this->commands[$command] ?? '';
-        if (!$handler) return Color::danger("The command '{$command}' is not exists!\n");
+        if (!$handler) {
+            $result = Color::danger("The command '{$command}' is not exists!\n");
+            $result .= $this->displayHelp();
+            return $result;
+        }
 
         $fullCmd = $this->script . " " . $handler->commandName();
 
