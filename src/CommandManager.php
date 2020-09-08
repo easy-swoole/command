@@ -187,11 +187,11 @@ class CommandManager
 
         $desc  = $handler->desc() ? ucfirst($handler->desc()) : 'No description for the command';
         $desc  = "<brown>$desc</brown>";
-        $usage = "$fullCmd <cyan>ACTION</cyan> [--opts ...]";
+        $usage = "<cyan>$fullCmd ACTION</cyan> [--opts ...]";
 
         $nodes = [
             $desc,
-            "\n<brown>Usage:</brown>" . "\n  $usage\n",
+            "<brown>Usage:</brown>" . "\n  $usage\n",
         ];
 
         $helpMsg = implode("\n", $nodes);
@@ -201,7 +201,7 @@ class CommandManager
         /** @var CommandHelp $commandHelp */
         $commandHelp = $handler->help(new CommandHelp());
 
-        $helpMsg .= "\n<brown>Actions:</brown>\n";
+        $helpMsg .= "<brown>Actions:</brown>\n";
 
         $actions     = $commandHelp->getActions();
         $actionWidth = $commandHelp->getActionWidth();
@@ -212,7 +212,7 @@ class CommandManager
             $helpMsg .= "  <green>$name</green>  $desc\n";
         }
 
-        $helpMsg .= "\n<brown>Options:</brown>\n";
+        $helpMsg .= "<brown>Options:</brown>\n";
 
         $opts     = $commandHelp->getOpts();
         $optWidth = $commandHelp->getOptWidth();
@@ -224,7 +224,7 @@ class CommandManager
 
         /**-----------------CommandHelp--------------------------------*/
 
-        return Color::render($helpMsg) . PHP_EOL;
+        return Color::render($helpMsg);
     }
 
     public function displayHelp()
@@ -247,9 +247,9 @@ class CommandManager
             $help    .= "  <green>$command</green>  $desc\n";
         }
 
-        $help .= "\nFor command usage please run: $usage";
+        $help .= "\nFor command usage please run: $usage\n";
 
-        return Color::render($help) . PHP_EOL;
+        return Color::render($help);
     }
 
     /**
@@ -324,4 +324,19 @@ class CommandManager
         return array_key_exists($name, $this->opts);
     }
 
+    /**
+     * @return string
+     */
+    public function getDesc(): string
+    {
+        return $this->desc;
+    }
+
+    /**
+     * @param string $desc
+     */
+    public function setDesc(string $desc): void
+    {
+        $this->desc = $desc;
+    }
 }
