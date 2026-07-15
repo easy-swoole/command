@@ -46,8 +46,8 @@ class Color
         'info'        => '0;32',
         'comment'     => '0;33',
         'note'        => '36;1',
-        'notice'      => '36;4',
-        'warning'     => '0;30;43',
+        'notice'      => '0;33',
+        'warning'     => '0;31',
         'danger'      => '0;31',
         'error'       => '97;41',
     ];

@@ -7,11 +7,9 @@ namespace EasySwoole\Command;
 
 use EasySwoole\Command\AbstractInterface\CallerInterface;
 use EasySwoole\Command\AbstractInterface\CommandInterface;
-use EasySwoole\Component\Singleton;
 
 class CommandManager
 {
-    use Singleton;
 
     /**
      * desc
