@@ -12,7 +12,7 @@ class Manager
     /**
      * @var array<AbstractCommand>
      */
-    public array $commands = [];
+    protected array $commands = [];
 
 
     function addCommand(AbstractCommand $command): void
@@ -46,10 +46,16 @@ class Manager
             return $result;
         }
         $result->status = ExecStatusEnum::OK;
-        $call = $command->getActions()[$caller->action]->getCallback();
+        $action = clone $command->getActions()[$caller->action];
+        $call = $action->getCallback();
         if(is_callable($call)){
+            $res = $action->__preCallCallback($caller,$result);
+            if(!$res){
+                return $result;
+            }
             call_user_func($call,$caller,$result);
         }
+
         return $result;
     }
 }

@@ -8,7 +8,6 @@ use EasySwoole\Command\Manager;
 
 abstract class AbstractCommand
 {
-    protected Manager $manager;
     function __construct()
     {
         $this->init();
@@ -21,7 +20,8 @@ abstract class AbstractCommand
 
     abstract function description():string;
 
-    abstract protected function init():void;
+    protected function init():void
+    {}
 
     public function registerAction(Action $action):void
     {

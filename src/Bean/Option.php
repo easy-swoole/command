@@ -8,8 +8,11 @@ class Option
     (
         public readonly string $name,
         public readonly string|null $description = null,
-        public mixed $value = null
-    )
-    {}
+    ){}
+
+    public static function validate(mixed $value,Caller $caller):bool|string
+    {
+        return true;
+    }
 
 }
