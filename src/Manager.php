@@ -66,6 +66,10 @@ class Manager
         $msg = '';
         switch ($result->status){
             case ExecStatusEnum::COMMAND_NOT_EXISTS:{
+                if(empty($this->commands)){
+                    $msg .= Color::error("not register any command")."\n";
+                    break;
+                }
                 if(!empty($caller->command)){
                     $matches = Utility::matchAlternativeCommands($caller->command,array_keys($this->commands));
                     if(empty($matches)){
@@ -88,6 +92,10 @@ class Manager
                 break;
             }
             case ExecStatusEnum::COMMAND_ACTION_NOT_EXISTS:{
+                if(empty(($this->commands[$caller->command]->getActions()))){
+                    $msg .= Color::error("not any action register on {$caller->command}")."\n";
+                    break;
+                }
                 if(!empty($caller->action)){
                     $msg .= "action ".Color::red($caller->action)." not exist \n";
                     $actions = $this->commands[$caller->command];
@@ -172,7 +180,9 @@ class Manager
                     $tip = '';
                 }
                 $msg = "exec command ".Color::red($caller->command)."@".Color::red($caller->action)." success{$tip}\n";
-            }
+            }break;
+            case ExecStatusEnum::INIT_STATUS:
+                throw new \Exception('To be implemented');
         }
         return $msg;
     }
