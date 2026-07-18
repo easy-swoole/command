@@ -130,7 +130,7 @@ class Manager
                 foreach ($this->commands[$caller->command]->getActions() as $name => $action){
                     $repeat = $tabLen - strlen($name);
                     $repeat = str_repeat(' ', $repeat);
-                    $msg .= Color::red($name)."{$repeat}{$action->description()}\n\n";
+                    $msg .= Color::red($name)."{$repeat}{$action->description()}\n";
                     foreach ($action->getOptions() as $optName => $option){
                         $opt = " --{$optName}";
                         $repeat = $tabLen - strlen($opt);
