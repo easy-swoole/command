@@ -144,10 +144,14 @@ $action = array_shift($commandLine->unknows);
 $call = new Caller($command,$action,$commandLine);
 $ret = $manager->exec($call);
 
-
-$ret = $manager->result2HelpMsg($call,$ret);
-
-echo $ret;
+if($ret->status == ExecStatusEnum::OK){
+    if(!empty($ret->msg)){
+        echo "{$ret->msg}\n";
+    }
+}else{
+    $ret = $manager->result2HelpMsg($call,$ret);
+    echo $ret;
+}
 
 
 ```
