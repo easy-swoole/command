@@ -145,7 +145,7 @@ $call = new Caller($command,$action,$commandLine);
 $ret = $manager->exec($call);
 
 
-$ret = $manager->result2Msg($call,$ret);
+$ret = $manager->result2HelpMsg($call,$ret);
 
 echo $ret;
 

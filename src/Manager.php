@@ -76,7 +76,7 @@ class Manager
     }
 
 
-    function result2Msg(Caller $caller, Result $result): string
+    function result2HelpMsg(Caller $caller, Result $result): string
     {
         $tabLen = 20;
         $msg = '';
