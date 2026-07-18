@@ -3,7 +3,9 @@
 namespace EasySwoole\Command\AbstractInterface;
 
 use EasySwoole\Command\Bean\Action;
+use EasySwoole\Command\Bean\Caller;
 use EasySwoole\Command\Bean\CommandLine;
+use EasySwoole\Command\Bean\Result;
 use EasySwoole\Command\Manager;
 
 abstract class AbstractCommand
@@ -43,5 +45,10 @@ abstract class AbstractCommand
     public function getActions():array
     {
         return $this->actions;
+    }
+
+    public function beforeExecute(Caller $caller,Result $result):bool
+    {
+        return true;
     }
 }

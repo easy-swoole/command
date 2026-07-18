@@ -55,13 +55,21 @@ class Manager
         }
         $result->status = ExecStatusEnum::OK;
         $action = clone $action;
-        $call = $action->getCallback();
-        if(is_callable($call)){
+        $callback = $action->getCallback();
+        if(is_callable($callback)){
+            $ret = $command->beforeExecute($caller,$result);
+            if($ret !== true){
+                if($result->status == ExecStatusEnum::OK){
+                    $result->status = ExecStatusEnum::COMMAND_REJECT_EXEC;
+                }
+                return $result;
+            }
+
             $res = $action->__preCallCallback($caller,$result);
             if(!$res){
                 return $result;
             }
-            call_user_func($call,$caller,$result);
+            call_user_func($callback,$caller,$result);
         }
 
         return $result;

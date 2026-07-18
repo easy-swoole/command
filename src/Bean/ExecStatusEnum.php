@@ -16,5 +16,7 @@ enum ExecStatusEnum
 
     case COMMAND_ACTION_EXEC_FAIL;
 
+    case COMMAND_REJECT_EXEC;
+
     case INIT_STATUS;
 }
