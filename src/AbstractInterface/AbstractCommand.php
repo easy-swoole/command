@@ -33,7 +33,6 @@ abstract class AbstractCommand
     function registerDefaultAction(Action $action):void
     {
         $this->defaultAction = $action;
-        $this->actions[$action->name] = $action;
     }
 
     function getDefaultAction():Action|null
