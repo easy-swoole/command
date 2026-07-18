@@ -32,7 +32,7 @@ class CommandLine
 
     function hasOption(string $key):bool
     {
-        if(isset($this->options[$key])){
+        if(array_key_exists($key,$this->options)){
             return true;
         }
         return false;
@@ -40,7 +40,7 @@ class CommandLine
 
     function hasParam(string $key):bool
     {
-        if(isset($this->params[$key])){
+        if(array_key_exists($key,$this->params)){
             return true;
         }
         return false;
