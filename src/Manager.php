@@ -173,16 +173,9 @@ class Manager
                 break;
             }
 
-            case ExecStatusEnum::OK:{
-                if(!empty($result->msg)){
-                    $tip = " with msg:\n\n".Color::info($result->msg);
-                }else{
-                    $tip = '';
-                }
-                $msg = "exec command ".Color::red($caller->command)."@".Color::red($caller->action)." success{$tip}\n";
-            }break;
-            case ExecStatusEnum::INIT_STATUS:
-                throw new \Exception('To be implemented');
+            case ExecStatusEnum::INIT_STATUS:{
+                $msg = Color::error('command status not be correct set')."\n";
+            }
         }
         return $msg;
     }
