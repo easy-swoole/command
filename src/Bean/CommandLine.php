@@ -30,6 +30,19 @@ class CommandLine
         return null;
     }
 
+    function hasOption(string $key):bool
+    {
+        if(isset($this->options[$key])){
+            return true;
+        }
+        return false;
+    }
 
-
+    function hasParam(string $key):bool
+    {
+        if(isset($this->params[$key])){
+            return true;
+        }
+        return false;
+    }
 }
