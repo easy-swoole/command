@@ -129,6 +129,8 @@ $actionA->setCallback(function (Caller $caller,Result $result) {
     $result->msg = "your opt1 is ".$caller->commandLine->getOption('opt2');
 });
 
+
+$fly->registerDefaultAction($actionA);
 $fly->registerAction($actionA);
 
 $manager = new Manager();

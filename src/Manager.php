@@ -41,12 +41,20 @@ class Manager
             return $result;
         }
         $command = $this->commands[$caller->command];
+        $action = null;
+
         if(!isset($command->getActions()[$caller->action])){
-            $result->status = ExecStatusEnum::COMMAND_ACTION_NOT_EXISTS;
-            return $result;
+            if($command->getDefaultAction()){
+                $action = $command->getDefaultAction();
+            }else{
+                $result->status = ExecStatusEnum::COMMAND_ACTION_NOT_EXISTS;
+                return $result;
+            }
+        }else{
+            $action = $command->getActions()[$caller->action];
         }
         $result->status = ExecStatusEnum::OK;
-        $action = clone $command->getActions()[$caller->action];
+        $action = clone $action;
         $call = $action->getCallback();
         if(is_callable($call)){
             $res = $action->__preCallCallback($caller,$result);
