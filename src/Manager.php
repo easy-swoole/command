@@ -60,7 +60,7 @@ class Manager
     }
 
 
-    function buildHelpMsg(Caller $caller,Result $result): string
+    function result2Msg(Caller $caller, Result $result): string
     {
         $tabLen = 20;
         $msg = '';

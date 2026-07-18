@@ -3,6 +3,7 @@
 ### Example
 
 ```php
+
 use EasySwoole\Command\AbstractInterface\AbstractCommand;
 use EasySwoole\Command\Bean\Action;
 use EasySwoole\Command\Bean\Caller;
@@ -19,33 +20,43 @@ use EasySwoole\Command\Utility;
 class TestCommand extends AbstractCommand{
     function name(): string
     {
-        return 'test';
+        return 'testCmdss';
     }
 
     function description(): string
     {
-        return 'test command action';
+        return 'test command desc';
     }
 
     protected function init(): void
     {
-        $actionA = new Action('actionA');
+        $actionA = new Action('actionA','actionA description');
 
         $actionA->addOption(new Option(
-            name:'opt1'
+            name:'opt1',
+            description: "opt1 description"
         ));
+        $actionA->addParam(new class('num1',"num1 desc") extends Param{
+            public static function validate(mixed $value,Caller $caller): bool|string
+            {
+                if($value < 5){
+//                    return 'num1 must be greater or equal to 5';
+                }
+                return true;
+            }
+        });
         $actionA->addOption(new Option('opt2'));
         $actionA->setCallback([$this, 'actionA']);
         $this->registerAction($actionA);
 
 
-        $actionB = new class('actionB') extends Action{
+        $actionB = new class('actionB','action b desc easyswoole ') extends Action{
             protected function init(): void
             {
                 $this->setCallback(function (Caller $caller,Result $result) {
                     $result->result = $caller->commandLine->getParam('num1') + $caller->commandLine->getParam('num2');
                 });
-                $this->addParam(new class('num1') extends Param{
+                $this->addParam(new class('num1',"num1 desc") extends Param{
                     public static function validate(mixed $value,Caller $caller): bool|string
                     {
                         if($value < 5){
@@ -94,14 +105,14 @@ class Fly extends AbstractCommand{
 
     function description(): string
     {
-        return 'fly command action';
+        return 'fly command description';
     }
 }
 
 $fly = new Fly();
 $actionA = new Action('actionA');
 
-$actionA->addOption(new Option('opt1'));
+$actionA->addOption(new Option('opt1',"opt1 description"));
 
 $actionA->addOption(new class ('opt2') extends Option
 {
@@ -114,7 +125,8 @@ $actionA->addOption(new class ('opt2') extends Option
 });
 
 $actionA->setCallback(function (Caller $caller,Result $result) {
-    $result->result = "your opt1 is ".$caller->commandLine->getOption('opt2');
+    $result->result = time() + $caller->commandLine->getOption('opt2');
+    $result->msg = "your opt1 is ".$caller->commandLine->getOption('opt2');
 });
 
 $fly->registerAction($actionA);
@@ -130,9 +142,10 @@ $action = array_shift($commandLine->unknows);
 $call = new Caller($command,$action,$commandLine);
 $ret = $manager->exec($call);
 
-var_dump('================');
-var_dump($ret->result,$ret->msg);
 
+$ret = $manager->result2Msg($call,$ret);
+
+echo $ret;
 
 
 ```
