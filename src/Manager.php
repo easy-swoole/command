@@ -58,4 +58,122 @@ class Manager
 
         return $result;
     }
+
+
+    function buildHelpMsg(Caller $caller,Result $result): string
+    {
+        $tabLen = 20;
+        $msg = '';
+        switch ($result->status){
+            case ExecStatusEnum::COMMAND_NOT_EXISTS:{
+                if(!empty($caller->command)){
+                    $matches = Utility::matchAlternativeCommands($caller->command,array_keys($this->commands));
+                    if(empty($matches)){
+                        $msg = Color::info('command ').Color::red($caller->command).Color::info(' not exists.')."\n";
+                    }else{
+                        $msg = Color::info('command ').Color::red($caller->command).Color::info(' not exists , do you mean:')."\n\n";
+                        foreach($matches as $match){
+                            $msg .= Color::red($match)." ? \n";
+                        }
+                        $msg .= "\n";
+                    }
+                }
+                $msg .= Color::info('current support command is:')."\n\n";
+
+                foreach ($this->commands as $name => $command){
+                    $repeat = $tabLen - strlen($name);
+                    $repeat = str_repeat(' ', $repeat);
+                    $msg .= Color::red($name).$repeat.Color::info($command->description())."\n";
+                }
+                break;
+            }
+            case ExecStatusEnum::COMMAND_ACTION_NOT_EXISTS:{
+                if(!empty($caller->action)){
+                    $msg .= "action ".Color::red($caller->action)." not exist \n";
+                    $actions = $this->commands[$caller->command];
+                    $matches = Utility::matchAlternativeCommands($caller->action,array_keys($actions->getActions()));
+                    if(empty($matches)){
+                        $msg = Color::info('action ').Color::red($caller->action).Color::info(' not exists.')."\n";
+                    }else{
+                        $msg = Color::info('action ').Color::red($caller->action).Color::info(' not exists , do you mean :')."\n\n";
+                        foreach($matches as $match){
+                            $msg .= Color::red($match)." ? \n";
+                        }
+                        $msg .= "\n";
+                    }
+                }
+                $msg .= Color::info('current support action is:')."\n\n";
+                foreach ($this->commands[$caller->command]->getActions() as $name => $action){
+                    $repeat = $tabLen - strlen($name);
+                    $repeat = str_repeat(' ', $repeat);
+                    $msg .= Color::red($name)."{$repeat}{$action->description()}\n\n";
+                    foreach ($action->getOptions() as $optName => $option){
+                        $opt = " --{$optName}";
+                        $repeat = $tabLen - strlen($opt);
+                        $repeat = str_repeat(' ', $repeat);
+                        $msg .= Color::notice($opt)."{$repeat}{$option->description()}"."\n";
+                    }
+                    foreach ($action->getParams() as $paramName => $param){
+                        $opt = " {$paramName}";
+                        $repeat = $tabLen - strlen($opt);
+                        $repeat = str_repeat(' ', $repeat);
+                        $msg .= Color::notice($opt)."{$repeat}{$param->description()}"."\n";
+                    }
+                    $msg .= "\n";
+                }
+                break;
+            }
+            case ExecStatusEnum::COMMAND_ACTION_PARAM_VALIDATE_FAIL:{
+                if(isset($result->result['failColumn'])){
+                    $failColumn = $result->result['failColumn'];
+                    $failColumn = ' '.Color::red($failColumn).' ';
+                }else{
+                    $failColumn = ' ';
+                }
+                if(!empty($result->msg)){
+                    $tip = " with error msg:\n\n".Color::info($result->msg);
+                }else{
+                    $tip = '';
+                }
+                $msg = "param{$failColumn}value validate fail{$tip}\n";
+                break;
+            }
+
+            case ExecStatusEnum::COMMAND_ACTION_OPTION_VALIDATE_FAIL:{
+                if(isset($result->result['failColumn'])){
+                    $failColumn = $result->result['failColumn'];
+                    $failColumn = ' '.Color::red($failColumn).' ';
+                }else{
+                    $failColumn = ' ';
+                }
+                if(!empty($result->msg)){
+                    $tip = " with error msg:\n\n".Color::info($result->msg);
+                }else{
+                    $tip = '';
+                }
+                $msg = "option{$failColumn}value validate fail{$tip}\n";
+                break;
+            }
+
+            case ExecStatusEnum::COMMAND_ACTION_EXEC_FAIL:{
+                if(!empty($result->msg)){
+                    $tip = " with error msg:\n\n".Color::info($result->msg);
+                }else{
+                    $tip = '';
+                }
+                $msg = "exec command ".Color::red($caller->command)."@".Color::red($caller->action)." fail{$tip}\n";
+                break;
+            }
+
+            case ExecStatusEnum::OK:{
+                if(!empty($result->msg)){
+                    $tip = " with msg:\n\n".Color::info($result->msg);
+                }else{
+                    $tip = '';
+                }
+                $msg = "exec command ".Color::red($caller->command)."@".Color::red($caller->action)." success{$tip}\n";
+            }
+        }
+        return $msg;
+    }
 }

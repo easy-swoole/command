@@ -72,10 +72,12 @@ class Color
      * @param null $style
      * @return string
      */
-    public static function render(string $text, $style = null): string
+    public static function render(string|null $text, $style = null): string
     {
-
-        if ($style == null || empty($style)) {
+        if($text == null){
+            return '';
+        }
+        if (empty($style)) {
             return self::parseTag($text);
         } else {
             $color = self::STYLES[$style] ?? 0;

@@ -14,5 +14,9 @@ class Option
     {
         return true;
     }
+    public function description():string|null
+    {
+        return $this->description;
+    }
 
 }

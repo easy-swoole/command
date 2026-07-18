@@ -40,6 +40,11 @@ class Action
         $this->params[$param->name] = $param;
     }
 
+    public function description():string|null
+    {
+        return $this->description;
+    }
+
     function setCallback(callable $callback):void
     {
         $this->callback = $callback;
