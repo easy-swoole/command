@@ -49,7 +49,7 @@ def until(session, marker, timeout=5):
     assert marker in output, bytes(output)
 
 
-def finish(session, code=0):
+def finish(session, code=0, raw=True):
     process, master, slave, mode, output = session
     try:
         assert process.wait(timeout=5) == code, bytes(output)
@@ -67,8 +67,9 @@ def finish(session, code=0):
         restored[3] &= ~pending
         mode[3] &= ~pending
         assert restored == mode, f'terminal mode was not restored: {mode!r} -> {restored!r}'
-        assert b'\x1b[?25h' in output, 'cursor was not restored'
-        assert b'\x1b[?1049l' in output, 'screen was not restored'
+        if raw:
+            assert b'\x1b[?25h' in output, 'cursor was not restored'
+            assert b'\x1b[?1049l' in output, 'screen was not restored'
         return bytes(output)
     finally:
         if process.poll() is None:
@@ -185,3 +186,60 @@ $console->live(static fn () => new EasySwoole\Command\Console\View\TableView(['S
     else:
         assert b'\x1b[0;32m' in output, output
     print('PASS live styled table with NO_COLOR' if disabled else 'PASS live styled table colors')
+
+
+# 模拟第一次 stty 恢复失败，验证显式重试和进程退出时的单次重试都恢复真实终端。
+for explicit in [True, False]:
+    code = r"""
+require $argv[1];
+$terminal = new class extends EasySwoole\Command\Console\Terminal {
+    private bool $closing = false;
+    private bool $failOnce = true;
+    public function close(): void {
+        $this->closing = true;
+        try { parent::close(); }
+        finally { $this->closing = false; }
+    }
+    protected function command(array $arguments): ?string {
+        if ($this->closing && $this->failOnce) {
+            $this->failOnce = false;
+            return null;
+        }
+        return parent::command($arguments);
+    }
+};
+$console = new EasySwoole\Command\Console\Console(terminal: $terminal);
+try { $console->live(static fn () => 'restore probe', .1); }
+catch (EasySwoole\Command\Exception\TerminalException $error) { echo 'restore deferred'; }
+if (EXPLICIT_RETRY) { $terminal->close(); }
+""".replace('EXPLICIT_RETRY', 'true' if explicit else 'false')
+    session = start(code=code)
+    until(session, b'restore probe')
+    os.write(session[1], b'q')
+    assert b'restore deferred' in finish(session)
+    print('PASS explicit terminal restore retry' if explicit else 'PASS shutdown terminal restore retry')
+
+# 跨行样式被逐行裁剪时，下一行仍继承原始颜色。
+session = start(code=r"""
+require $argv[1];
+$console = new EasySwoole\Command\Console\Console();
+$console->live(static fn () => EasySwoole\Command\Console\Color::green("one\ntwo"), .1);
+""", environment={'NO_COLOR': None})
+until(session, b'\x1b[0;32mtwo')
+os.write(session[1], b'q')
+output = finish(session)
+assert b'\x1b[0;32mone\x1b[0m' in output, output
+print('PASS multiline live color continuation')
+
+# 输入输出都是真实 TTY 时，显式禁用策略仍不能进入交互或切换终端模式。
+session = start(code=r"""
+require $argv[1];
+$console = new EasySwoole\Command\Console\Console(allowInteraction: false);
+try { $console->prompt('must not prompt'); }
+catch (RuntimeException $error) { echo 'interaction blocked'; }
+""")
+until(session, b'interaction blocked')
+output = finish(session, raw=False)
+assert b'must not prompt' not in output, output
+assert b'\x1b[?1049h' not in output, output
+print('PASS explicit no interaction policy on a real TTY')

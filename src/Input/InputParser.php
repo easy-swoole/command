@@ -17,8 +17,10 @@ final class InputParser
             if (!is_string($token)) { throw new InputException('argv must contain strings'); }
             if (!$literal && $token === '--') { $literal = true; continue; }
             if (!$literal && str_starts_with($token, '-') && $token !== '-') {
-                [$name, $value] = array_pad(explode('=', ltrim($token, '-'), 2), 2, null);
-                if ($name === '') { throw new InputException('invalid option'); }
+                if (!preg_match('/^--?([A-Za-z][A-Za-z0-9_-]*)(?:=(.*))?$/sD', $token, $match)) {
+                    throw new InputException('invalid option: ' . $token);
+                }
+                $name = $match[1]; $value = $match[2] ?? null;
                 $options[$name] = $value;
                 $occurrences[$name][] = $value;
             } else { $words[] = [$token, $literal]; }

@@ -98,3 +98,22 @@ test('prompt uses the same color and control sequence policy as ordinary output'
         rewind($out); same('Question: ', stream_get_contents($out));
     } finally { fclose($out); }
 });
+
+
+test('multiline frames carry original colors across lines and reset every visible line', function () {
+    $terminal = new class extends FakeTerminal { public function supportsColor(): bool { return true; } };
+    $terminal->frame(Color::green("one\ntwo"));
+    same("\033[H\033[J\033[0;32mone\033[0m\n\033[0;32mtwo\033[0m", end($terminal->frames));
+    same("one\ntwo", Text::fitLines(Color::green("one\ntwo"), 20, 2, false));
+    same('', Text::fitLines('one', 20, 0));
+});
+
+test('multiline clipping respects hidden resets and partial style changes', function () {
+    $text = "\033[32m中文ABCDE\033[0m\nplain";
+    $lines = explode("\n", Text::fitLines($text, 3, 2));
+    same('中', Text::clean($lines[0], false));
+    same('pla', $lines[1]);
+    $lines = explode("\n", Text::fitLines("\033[32mone\n\033[39mtwo\nthree", 20, 3));
+    same("\033[32m\033[39mthree\033[0m", $lines[2]);
+    same("\033[32mx\033[0m\n\033[32my\033[0m", Text::fitLines("\033[32mx\ny", 20, 2));
+});

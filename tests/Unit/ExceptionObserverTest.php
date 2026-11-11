@@ -69,3 +69,23 @@ test('interruptions preserve their exit code and original throwable', function (
     same(143, $app->dispatch(['run'])->exitCode);
     same([$error], $seen);
 });
+
+
+test('whole input rejection preserves bound input and the original exception', function () {
+    $original = new InputException('cross field failure');
+    $definition = CommandDefinition::create('run')->option(Option::integer('count', default: 3));
+    $definition->validateInput(static fn () => throw $original);
+    $app = new Application();
+    $app->registry()->register($definition, static fn () => throw new LogicException('factory must not run'));
+    $event = null;
+    $app->onException(function ($caught) use (&$event) { $event = $caught; });
+    same(2, $app->dispatch(['run', '--count=4'])->exitCode);
+    same($original, $event->error); same($original->input, $event->input);
+    same('run', $event->input->command()); same(4, $event->input->option('count'));
+    same(true, $event->input->provided('count'));
+    $definition = CommandDefinition::create('falseRule')->option(Option::flag('enabled'));
+    $definition->validateInput(static fn () => false);
+    $app->registry()->register($definition, static fn () => throw new LogicException('factory must not run'));
+    same(2, $app->dispatch(['falseRule'])->exitCode);
+    same(false, $event->input->option('enabled'));
+});

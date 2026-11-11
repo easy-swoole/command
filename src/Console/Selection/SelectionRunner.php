@@ -16,18 +16,28 @@ final class SelectionRunner
         $state = new SelectionState($choices, $multiple);
         $renderer = new SelectionRenderer();
         $previous = null;
+        $size = null;
+        $dirty = true;
         while (true) {
             [$rows, $columns] = $this->terminal->dimensions();
-            $state->setPageSize($renderer->pageSize($rows, $columns));
-            $frame = $renderer->render($title, $state, $rows, $columns);
-            $signature = [$frame, $rows, $columns];
-            if ($signature !== $previous) {
-                $this->terminal->frame($frame);
-                $previous = $signature;
+            if ($size !== [$rows, $columns]) {
+                $size = [$rows, $columns];
+                $state->setPageSize($renderer->pageSize($rows, $columns));
+                $dirty = true;
+            }
+            if ($dirty) {
+                $frame = $renderer->render($title, $state, $rows, $columns);
+                $signature = [$frame, $rows, $columns];
+                if ($signature !== $previous) {
+                    $this->terminal->frame($frame);
+                    $previous = $signature;
+                }
+                $dirty = false;
             }
             if (!$this->terminal->wait(.1)) { continue; }
             $result = $state->handle($this->terminal->key());
             if ($result !== null) { return $result; }
+            $dirty = true;
         }
     }
 }

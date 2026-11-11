@@ -86,3 +86,14 @@ test('argument presence distinguishes defaults named and positional values', fun
     same(false, $input->optionProvided('target')); same(false, $input->provided('target'));
     same(false, $input->argumentProvided('count'));
 });
+
+
+test('malformed option prefixes are rejected while legacy and literal values remain valid', function () {
+    foreach (['---force', '----force=false', '--=x', '-=x', '--force bad', '--1force'] as $token) {
+        same(2, app()->dispatch(['demo', 'run', $token])->exitCode);
+    }
+    same(true, app()->dispatch(['demo', 'run', '-force'])->data[0]['force']);
+    same(false, app()->dispatch(['demo', 'run', '--force=false'])->data[0]['force']);
+    same('---force', app()->dispatch(['demo', 'run', '--', '---force'])->data[1]);
+    same("a=b\nc", app()->dispatch(['demo', 'run', "--mode=a=b\nc"])->data[0]['mode']);
+});

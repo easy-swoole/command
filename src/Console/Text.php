@@ -31,6 +31,25 @@ final class Text
         return $text;
     }
 
+    /** 原始样式跨行延续；每个可见行独立裁剪、复位，不让裁剪改变下一行的样式。 */
+    public static function fitLines(string $text, int $width, int $height, bool $colors = true): string
+    {
+        if ($width <= 0 || $height <= 0) { return ''; }
+        $text = self::clean(str_replace("\r", '', $text), $colors, multiline: true);
+        $lines = array_slice(explode("\n", $text), 0, $height);
+        $style = ''; $result = [];
+        foreach ($lines as $line) {
+            $result[] = self::fit($style . $line, $width, $colors);
+            if (!$colors) { continue; }
+            preg_match_all('/\x1b\[[0-9;:]*m/', $line, $matches);
+            foreach ($matches[0] as $sequence) {
+                // 保留局部复位的先后顺序；完整复位后，前面的样式不再参与下一行。
+                $style = preg_match('/^\x1b\[(?:0;)*0?m$/D', $sequence) === 1 ? '' : $style . $sequence;
+            }
+        }
+        return implode("\n", $result);
+    }
+
     /** 删除可见行尾空格时保留样式复位，避免颜色码阻止普通 rtrim 清除空白。 */
     public static function trimEnd(string $text): string
     {

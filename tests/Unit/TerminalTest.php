@@ -147,3 +147,40 @@ test('failed open rollback is not downgraded to numbered input', function () {
     same(['2'], $terminal->lines);
     console()->live(fn () => false);
 });
+
+
+test('failed terminal mode restoration can be retried without repeating screen cleanup', function () {
+    $terminal = new class extends FakeTerminal {
+        public int $restores = 0;
+        protected function command(array $args): ?string {
+            $result = parent::command($args);
+            return $args === ['saved'] && ++$this->restores === 1 ? null : $result;
+        }
+    };
+    $console = console($terminal);
+    raises(fn () => $console->live(fn () => false), TerminalException::class);
+    same(1, $terminal->restores);
+    raises(fn () => $terminal->open(), LogicException::class);
+    $frames = $terminal->frames;
+    $terminal->close();
+    same(2, $terminal->restores); same($frames, $terminal->frames);
+    $terminal->close(); same(2, $terminal->restores);
+    $console->live(fn () => false); same(3, $terminal->restores);
+});
+
+test('retrying an old terminal does not modify another active session', function () {
+    $terminal = new class extends FakeTerminal {
+        public bool $fail = true;
+        protected function command(array $args): ?string {
+            $result = parent::command($args);
+            return $args === ['saved'] && $this->fail ? null : $result;
+        }
+    };
+    raises(fn () => console($terminal)->live(fn () => false), TerminalException::class);
+    $terminal->fail = false;
+    console()->live(function () use ($terminal) {
+        raises(fn () => $terminal->close(), TerminalException::class);
+        return false;
+    });
+    $terminal->close();
+});

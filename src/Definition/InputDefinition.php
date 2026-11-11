@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace EasySwoole\Command\Definition;
 
 use EasySwoole\Command\Input\Input;
+use EasySwoole\Command\Exception\InputException;
 use EasySwoole\Command\Validation\ValidationChain;
 
 /** 命令及操作共用的输入规则与说明，不包含执行回调。 */
@@ -46,7 +47,10 @@ abstract class InputDefinition
     public function hasInputValidators(): bool { return !$this->inputValidators->isEmpty(); }
     /** @internal 由输入绑定流程调用，不创建业务实例。 */
     public function validateBoundInput(Input $input): void
-    { $this->inputValidators->validate($input, 'input'); }
+    {
+        try { $this->inputValidators->validate($input, 'input'); }
+        catch (InputException $error) { $error->input = $input; throw $error; }
+    }
 
     public function metadata(string $key, mixed $value): static { $this->metadata[$key] = $value; return $this; }
     public function meta(string $key): mixed { return $this->metadata[$key] ?? null; }

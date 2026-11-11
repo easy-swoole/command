@@ -82,6 +82,7 @@ class Application
             }
             return $next();
         } catch (\Throwable $error) {
+            $input ??= $error instanceof InputException ? $error->input : null;
             $event = new ExceptionEvent($error, $parsed?->commandName, $parsed?->actionName, $input);
             foreach ($this->exceptionObservers as $observer) {
                 try { $observer($event); }
@@ -98,8 +99,10 @@ class Application
     {
         $console ??= new Console();
         $result = $this->dispatch($argv, $console);
-        if ($result->message !== null && $result->message !== '') {
-            $console->line($result->message, $result->exitCode !== 0);
+        try { $console->writeResult($result); }
+        catch (\JsonException $error) {
+            $console->error('cannot encode command result: ' . $error->getMessage());
+            return 1;
         }
         return $result->exitCode;
     }

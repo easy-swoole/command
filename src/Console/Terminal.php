@@ -38,6 +38,7 @@ class Terminal
     public function open(): void
     {
         if (self::$owner !== null || $this->opened) { throw new \LogicException('an interactive view is already active'); }
+        if ($this->savedMode !== null) { throw new \LogicException('retry close() to restore terminal mode before reopening'); }
         if (!$this->supported()) { throw new TerminalException('an interactive terminal is required'); }
         $saved = $this->command(['-g']);
         if (!$saved) { throw new TerminalException('cannot read terminal mode'); }
@@ -48,7 +49,10 @@ class Terminal
         self::$owner = $this;
         try {
             if (!$this->shutdownRegistered) {
-                register_shutdown_function([$this, 'close']);
+                register_shutdown_function(function (): void {
+                    try { $this->close(); }
+                    catch (TerminalException) { /* 退出时只尝试一次，不用清理错误覆盖退出结果。 */ }
+                });
                 $this->shutdownRegistered = true;
             }
             $this->installSignals();
@@ -74,19 +78,23 @@ class Terminal
     /** 幂等关闭，各清理阶段使用 finally，避免中途失败导致占用状态遗留。 */
     public function close(): void
     {
-        if (!$this->opened) { return; }
+        if (!$this->opened && $this->savedMode === null) { return; }
+        if (self::$owner !== null && self::$owner !== $this) {
+            throw new TerminalException('cannot restore terminal mode while another session is active');
+        }
         $saved = $this->savedMode;
-        $this->savedMode = null;
         $this->opened = false;
         $this->keyboard = null;
         try {
             if ($saved !== null && $this->command([$saved]) === null) {
                 throw new TerminalException('cannot restore terminal mode');
             }
+            // 仅在恢复成功后清除原始模式，失败时供显式 close 或退出清理再试。
+            $this->savedMode = null;
         } finally {
             try { $this->restoreSignals(); }
             finally {
-                self::$owner = null;
+                if (self::$owner === $this) { self::$owner = null; }
                 if ($this->screenAttempted) {
                     $this->screenAttempted = false;
                     $this->write("\033[?25h\033[?1049l");
@@ -156,7 +164,7 @@ class Terminal
     {
         [$height, $width] = $this->dimensions();
         // 裁剪视口并预留边缘单元格，防止自动换行或滚屏破坏后续原地绘制。
-        $lines = array_slice(explode("\n", str_replace("\r", '', $text)), 0, max(0, $height - 1));
-        $this->write("\033[H\033[J" . implode("\n", array_map(fn ($line) => Text::fit($line, $width - 1, $this->supportsColor()), $lines)));
+        $frame = Text::fitLines($text, $width - 1, $height - 1, $this->supportsColor());
+        $this->write("\033[H\033[J" . $frame);
     }
 }
