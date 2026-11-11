@@ -4,6 +4,15 @@ declare(strict_types=1);
 
 namespace EasySwoole\Command;
 
+use EasySwoole\Command\Console\Console;
+use EasySwoole\Command\Contracts\CommandInterface;
+use EasySwoole\Command\Contracts\CommandProviderInterface;
+use EasySwoole\Command\Exception\InputException;
+use EasySwoole\Command\Exception\InterruptedException;
+use EasySwoole\Command\Input\InputParser;
+use EasySwoole\Command\Result\CommandResult;
+
+/** 组织解析、校验、中间件与命令执行；具体业务初始化由宿主应用通过中间件接入。 */
 class Application
 {
     private CommandRegistry $registry;
@@ -19,6 +28,7 @@ class Application
     public function dispatch(array $argv, ?Console $console = null): CommandResult
     {
         $console ??= new Console();
+        // 在应用边界统一转换退出码；分发只返回结果，由 run 决定输出到标准输出或标准错误。
         try {
             $help = false;
             if (($argv[0] ?? null) === 'help') { array_shift($argv); $help = true; }
@@ -26,6 +36,7 @@ class Application
             [$definition, $options, $words, $path] = $parser->parse($argv, $this->registry);
             $help = $help || array_key_exists('help', $options);
             unset($options['help']);
+            // 仅命令组名称匹配时展示帮助；未知路径报错，避免误执行其他操作。
             if ($definition === null) {
                 $prefix = implode(' ', $path);
                 $matches = array_filter($this->registry->definitions(), static fn ($d) => $prefix === '' || str_starts_with($d->name, $prefix . ' '));
@@ -33,16 +44,20 @@ class Application
                 if ($options) { throw new InputException('unexpected option --' . array_key_first($options)); }
                 return CommandResult::success($this->help($matches));
             }
+            // 帮助先于参数绑定与工厂调用，缺少必填值也可查看帮助，且不会创建业务依赖。
             if ($help) {
                 if ($words) { throw new InputException('unexpected command or argument in help request'); }
                 return CommandResult::success($this->help([$definition]));
             }
+            // 在执行中间件之前完成校验，防止无效输入触发框架初始化或网络连接。
             $input = $parser->bind($definition, $options, $words);
+            // 同一次分发复用一个延迟创建的命令实例，避免实时刷新反复构建依赖。
             $command = null;
             $next = function () use ($definition, $input, $console, &$command): CommandResult {
                 $command ??= $this->registry->create($definition->name);
                 return $command->execute($input, $console);
             };
+            // 倒序包裹回调，使最先注册的中间件最先进入、最后退出。
             foreach (array_reverse($this->middleware) as $middleware) {
                 $inner = $next;
                 $next = fn () => $middleware($definition, $input, $console, $inner);

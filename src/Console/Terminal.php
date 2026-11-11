@@ -2,13 +2,17 @@
 
 declare(strict_types=1);
 
-namespace EasySwoole\Command;
+namespace EasySwoole\Command\Console;
+
+use EasySwoole\Command\Exception\InterruptedException;
+use EasySwoole\Command\Exception\TerminalException;
 
 /** 可注入的终端驱动，负责原始输入模式及独占交互会话。 */
 class Terminal
 {
     protected mixed $input;
     protected mixed $output;
+    /** 进程内共享占用状态，阻止不同 Console 实例同时修改同一个终端的输入模式。 */
     private static ?self $owner = null;
     private ?string $savedMode = null;
     private bool $opened = false;
@@ -33,14 +37,17 @@ class Terminal
         if (!$this->supported()) { throw new TerminalException('an interactive terminal is required'); }
         $saved = $this->command(['-g']);
         if (!$saved) { throw new TerminalException('cannot read terminal mode'); }
+        // 关闭行缓冲、输入回显及终端按键信号转换，由事件循环解释方向键与 Ctrl+C。
         if ($this->command(['-icanon', '-echo', '-isig', '-ixon', 'min', '1', 'time', '0']) === null) {
             $this->command([$saved]); throw new TerminalException('cannot enable keyboard input');
         }
         $this->savedMode = $saved; $this->opened = true; self::$owner = $this;
         if (!$this->shutdownRegistered) { register_shutdown_function([$this, 'close']); $this->shutdownRegistered = true; }
         $this->installSignals();
+        // 进入备用屏幕并隐藏光标；退出时恢复原屏幕，保留用户之前的终端内容。
         $this->write("\033[?1049h\033[?25l");
     }
+    /** 关闭操作可重复调用，供正常退出、异常清理与进程结束回调共用。 */
     public function close(): void
     {
         if (!$this->opened) { return; }
@@ -51,6 +58,7 @@ class Terminal
     private function installSignals(): void
     {
         if (!function_exists('pcntl_signal_get_handler') || !function_exists('pcntl_async_signals')) { return; }
+        // 仅会话期间接管外部信号，通过异常展开 finally；关闭时归还宿主原有处理器。
         foreach ([SIGINT, SIGTERM, SIGHUP] as $signal) {
             $this->signalHandlers[$signal] = pcntl_signal_get_handler($signal);
             pcntl_signal($signal, static function (int $signal): void { throw new InterruptedException($signal); });
@@ -66,6 +74,7 @@ class Terminal
     public function dimensions(): array
     {
         $now = $this->now();
+        // 缓存短时间内的尺寸查询，避免高频键盘循环不断启动 stty 子进程。
         if ($now - $this->lastSizeAt < .2) { return $this->lastSize; }
         $this->lastSizeAt = $now;
         $size = $this->command(['size']);
@@ -92,6 +101,7 @@ class Terminal
         $char = fgetc($this->input);
         if ($char === false) { return null; }
         $byte = ord($char);
+        // 拼接完整 UTF-8 字符，避免中文搜索按字节拆分；不完整输入采用有限等待。
         if ($byte >= 0xc2 && $byte <= 0xf4) {
             $length = $byte < 0xe0 ? 2 : ($byte < 0xf0 ? 3 : 4);
             $character = $char;
@@ -103,6 +113,7 @@ class Terminal
             }
             return preg_match('//u', $character) === 1 ? $character : 'ignore';
         }
+        // Esc 既可独立表示取消，也可能是方向键序列的前缀，通过短等待区分。
         if ($char === "\033") {
             if (!$this->wait(.05)) { return 'cancel'; }
             $prefix = fgetc($this->input);
@@ -135,6 +146,7 @@ class Terminal
     public function frame(string $text): void
     {
         [$height, $width] = $this->dimensions();
+        // 裁剪视口并预留边缘单元格，防止自动换行或滚屏破坏后续原地绘制。
         $lines = array_slice(explode("\n", str_replace("\r", '', $text)), 0, max(1, $height - 1));
         $this->write("\033[H\033[J" . implode("\n", array_map(static fn ($line) => self::fit(self::clean($line), $width - 1), $lines)));
     }

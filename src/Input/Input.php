@@ -2,8 +2,9 @@
 
 declare(strict_types=1);
 
-namespace EasySwoole\Command;
+namespace EasySwoole\Command\Input;
 
+/** 已绑定的只读输入；选项值与用户是否显式提供该选项分别保存，避免默认值掩盖输入意图。 */
 final class Input
 {
     public function __construct(

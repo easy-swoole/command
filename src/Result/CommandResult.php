@@ -2,8 +2,9 @@
 
 declare(strict_types=1);
 
-namespace EasySwoole\Command;
+namespace EasySwoole\Command\Result;
 
+/** 命令执行结果：0 表示成功，1 表示执行失败，2 表示输入错误；也可使用业务退出码。 */
 final class CommandResult
 {
     public function __construct(

@@ -1,0 +1,52 @@
+<?php
+
+declare(strict_types=1);
+
+use EasySwoole\Command\Definition\Argument;
+use EasySwoole\Command\Definition\CommandDefinition;
+use EasySwoole\Command\Definition\Option;
+use EasySwoole\Command\Exception\InputException;
+use EasySwoole\Command\Input\InputParser;
+
+test('typed input and legacy single dash', function () {
+    $r = app()->dispatch(['demo', 'run', '-d', '-force=false', '--mode=produce', '--pid=0012', 'name=hello']);
+    same(0, $r->exitCode); same(true, $r->data[0]['d']); same(false, $r->data[0]['force']);
+    same(12, $r->data[0]['pid']); same('hello', $r->data[1]); same(true, $r->data[2]);
+});
+
+test('option presence and defaults', function () {
+    $r = app()->dispatch(['demo', 'run']); same(false, $r->data[2]); same('dev', $r->data[0]['mode']);
+    same(true, app()->dispatch(['demo', 'run', '--force'])->data[0]['force']);
+});
+
+test('watch optional value', function () {
+    same(2.0, app()->dispatch(['demo', 'run', '--watch'])->data[0]['watch']);
+    same(.25, app()->dispatch(['demo', 'run', '--watch=0.25'])->data[0]['watch']);
+});
+
+test('last repeated option wins', fn () => same('test', app()->dispatch(['demo', 'run', '--mode=dev', '--mode=test'])->data[0]['mode']));
+
+test('options before command', fn () => same('prod', app()->dispatch(['--mode=prod', 'demo', 'run'])->data[0]['mode']));
+
+test('equals preserved', fn () => same('a=b', app()->dispatch(['demo', 'run', '--mode=a=b'])->data[0]['mode']));
+
+test('positional argument', fn () => same('hello', app()->dispatch(['demo', 'run', 'hello'])->data[1]));
+
+test('literal terminator', fn () => same('-a=b', app()->dispatch(['demo', 'run', '--', '-a=b'])->data[1]));
+
+foreach ([['--unknown'], ['--mode'], ['--pid=0'], ['--pid=-1'], ['--pid=1.5'], ['--pid=99999999999999999999999'], ['--force=bad'], ['--watch=0'], ['--watch=INF'], ['--watch=NaN']] as $options) {
+    test('invalid ' . implode(' ', $options), fn () => same(2, app()->dispatch(array_merge(['demo', 'run'], $options))->exitCode));
+}
+
+test('unexpected argument', fn () => same(2, app()->dispatch(['demo', 'run', 'a', 'b'])->exitCode));
+
+test('unknown named argument', fn () => same(2, app()->dispatch(['demo', 'run', 'unknown=x'])->exitCode));
+
+test('duplicate named argument', fn () => same(2, app()->dispatch(['demo', 'run', 'name=x', 'name=y'])->exitCode));
+
+test('required argument and option', function () {
+    $p = new InputParser(); $d = CommandDefinition::named('a')->argument(new Argument('x', required: true))->option(Option::string('y', required: true));
+    raises(fn () => $p->bind($d, []), InputException::class);
+    raises(fn () => $p->bind($d, ['y' => 'yes']), InputException::class);
+    same('ok', $p->bind($d, ['y' => 'yes'], [['ok', false]])->argument('x'));
+});

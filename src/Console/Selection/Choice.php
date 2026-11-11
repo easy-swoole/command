@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace EasySwoole\Command;
+namespace EasySwoole\Command\Console\Selection;
 
 final class Choice
 {

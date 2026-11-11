@@ -1,6 +1,6 @@
 <?php
 
-namespace EasySwoole\Command;
+namespace EasySwoole\Command\Console;
 
 
 /**

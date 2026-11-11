@@ -2,11 +2,42 @@
 
 独立的 PHP 8.1+ 命令执行与终端交互组件，无需依赖 EasySwoole 主框架、Swoole 扩展或依赖注入容器。3.x 使用全新的 PHP 接口，不兼容 2.x 接口。
 
+## 目录结构
+
+```text
+src/
+├── Application.php          # 应用入口与执行流程
+├── CommandRegistry.php      # 命令注册与延迟创建
+├── Contracts/               # 命令与组件注册契约
+├── Definition/              # 命令、选项和参数定义
+├── Input/                   # 输入解析与参数绑定
+├── Console/
+│   ├── Console.php          # 终端输出与交互入口
+│   ├── Terminal.php         # 终端驱动及会话管理
+│   ├── Color.php            # 颜色工具
+│   ├── Selection/           # 选择项和选择结果
+│   └── View/                # 视图契约与表格视图
+├── Exception/               # 输入、终端及中断异常
+└── Result/                  # 命令执行结果
+
+tests/
+├── bootstrap.php            # 独立自动加载与测试准备
+├── run.php                  # 回归测试入口
+├── Support/                 # 断言、测试命令和模拟终端
+├── Unit/                    # 按职责划分的回归用例
+└── terminal_test.py         # 真实终端交互测试
+```
+
 ## 定义与注入命令
 
 ```php
-use EasySwoole\Command\{Application, CommandDefinition, CommandInterface,
-    CommandResult, Console, Input, Option};
+use EasySwoole\Command\Application;
+use EasySwoole\Command\Console\Console;
+use EasySwoole\Command\Contracts\CommandInterface;
+use EasySwoole\Command\Definition\CommandDefinition;
+use EasySwoole\Command\Definition\Option;
+use EasySwoole\Command\Input\Input;
+use EasySwoole\Command\Result\CommandResult;
 
 final class CacheClearCommand implements CommandInterface
 {
@@ -75,6 +106,8 @@ $app->registry()->register(
 `Console` 提供 `line()`、`info()`、`error()`、`table()`、`prompt()`、`confirm()`、`select()`、`live()`。
 
 ```php
+use EasySwoole\Command\Console\Selection\Choice;
+
 $result = $console->select('选择操作目标', [
     new Choice('primary', '主实例', $primary, '生产环境'),
     new Choice('secondary', '备用实例', $secondary, '待命'),
@@ -90,6 +123,8 @@ if (!$result->cancelled() && $console->confirm('是否继续？', default: false
 每个选项具有稳定且唯一的 ID。选择结果区分 selected（已选择）、cancelled（已取消）和 eof（输入流关闭）。方向键移动，空格切换选中状态，a 切换全部可见选项，/ 进入搜索，回车确认，q、Esc 或 Ctrl+C 取消。搜索模式下可输入文字，按回车返回导航模式。长列表会在终端可视区域内滚动。
 
 ```php
+use EasySwoole\Command\Console\View\TableView;
+
 $console->live(
     refresh: fn () => new TableView(['PID', '内存'], $service->status()),
     interval: .5,

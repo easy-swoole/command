@@ -115,7 +115,7 @@ else:
 
 session = start(code=r"""
 require $argv[1];
-$terminal = new EasySwoole\Command\Terminal();
+$terminal = new EasySwoole\Command\Console\Terminal();
 try {
     $terminal->open();
     $terminal->frame('unicode probe');

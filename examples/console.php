@@ -4,8 +4,17 @@ declare(strict_types=1);
 
 require __DIR__ . '/../vendor/autoload.php';
 
-use EasySwoole\Command\{Application, Choice, CommandDefinition, CommandInterface,
-    CommandProviderInterface, CommandRegistry, CommandResult, Console, Input, Option, TableView};
+use EasySwoole\Command\Application;
+use EasySwoole\Command\CommandRegistry;
+use EasySwoole\Command\Console\Console;
+use EasySwoole\Command\Console\Selection\Choice;
+use EasySwoole\Command\Console\View\TableView;
+use EasySwoole\Command\Contracts\CommandInterface;
+use EasySwoole\Command\Contracts\CommandProviderInterface;
+use EasySwoole\Command\Definition\CommandDefinition;
+use EasySwoole\Command\Definition\Option;
+use EasySwoole\Command\Input\Input;
+use EasySwoole\Command\Result\CommandResult;
 
 final class DemoCommand implements CommandInterface
 {

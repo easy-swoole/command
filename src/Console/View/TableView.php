@@ -2,7 +2,9 @@
 
 declare(strict_types=1);
 
-namespace EasySwoole\Command;
+namespace EasySwoole\Command\Console\View;
+
+use EasySwoole\Command\Console\Terminal;
 
 final class TableView implements ViewInterface
 {

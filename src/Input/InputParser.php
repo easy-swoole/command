@@ -2,16 +2,26 @@
 
 declare(strict_types=1);
 
-namespace EasySwoole\Command;
+namespace EasySwoole\Command\Input;
+
+use EasySwoole\Command\CommandRegistry;
+use EasySwoole\Command\Definition\CommandDefinition;
+use EasySwoole\Command\Exception\InputException;
 
 final class InputParser
 {
-    /** argv 不包含脚本名称；优先匹配已注册的最长命令路径。 */
+    /**
+     * 第一阶段只拆分词元并定位命令，不做类型转换或业务初始化。
+     * argv 不包含脚本名称；优先匹配已注册的最长命令路径。
+     *
+     * @return array{?CommandDefinition, array, array, array} 命令定义、原始选项、剩余参数及全部非选项词元。
+     */
     public function parse(array $tokens, CommandRegistry $registry): array
     {
         $options = []; $words = []; $literal = false;
         foreach ($tokens as $token) {
             if (!is_string($token)) { throw new InputException('argv must contain strings'); }
+            // 终止符之后保留字面值标记，防止以短横线开头或包含等号的参数被再次解释。
             if (!$literal && $token === '--') { $literal = true; continue; }
             if (!$literal && str_starts_with($token, '-') && $token !== '-') {
                 [$name, $value] = array_pad(explode('=', ltrim($token, '-'), 2), 2, null);
@@ -19,6 +29,7 @@ final class InputParser
                 $options[$name] = $value; // 保留原有命令行语义：重复选项取最后一次传入的值。
             } else { $words[] = [$token, $literal]; }
         }
+        // 按路径长度选择最具体的命令，例如同时存在 cache 与 cache clear 时优先后者。
         $definitions = $registry->definitions(); $matched = null; $length = 0;
         foreach ($definitions as $definition) {
             $path = explode(' ', $definition->name);
@@ -28,6 +39,7 @@ final class InputParser
         }
         return [$matched, $options, array_slice($words, $length), array_column($words, 0)];
     }
+    /** 第二阶段依据命令定义拒绝未知字段、绑定类型，并检查必填项与多余参数。 */
     public function bind(CommandDefinition $definition, array $options, array $words = []): Input
     {
         $bound = []; $arguments = []; $positional = [];
@@ -45,6 +57,7 @@ final class InputParser
                 $arguments[$name] = $value;
             } else { $positional[] = $word; }
         }
+        // 命名参数优先占位，其余位置参数按定义顺序填充尚未提供的字段。
         foreach ($definition->arguments() as $name => $argument) {
             if (!array_key_exists($name, $arguments)) {
                 $arguments[$name] = $positional ? array_shift($positional) : $argument->default;

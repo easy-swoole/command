@@ -2,8 +2,9 @@
 
 declare(strict_types=1);
 
-namespace EasySwoole\Command;
+namespace EasySwoole\Command\Console\Selection;
 
+/** 区分确认、主动取消与输入结束；values 返回原始业务值，不要求调用方反查展示序号。 */
 final class Selection
 {
     private function __construct(public readonly string $state, public readonly array $choices = []) {}

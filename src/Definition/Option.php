@@ -2,8 +2,11 @@
 
 declare(strict_types=1);
 
-namespace EasySwoole\Command;
+namespace EasySwoole\Command\Definition;
 
+use EasySwoole\Command\Exception\InputException;
+
+/** 不可变的选项声明；将原始字符串与存在性转换为业务可直接使用的类型值。 */
 final class Option
 {
     private function __construct(
@@ -31,6 +34,7 @@ final class Option
     { return new self($this->name, $this->type, $this->description, $this->default, $this->required, $this->implicit, \Closure::fromCallable($validator)); }
     public function bind(mixed $value, bool $provided): mixed
     {
+        // 未提供选项时使用默认值；显式提供但省略值时，只允许使用声明过的隐式值。
         if (!$provided) {
             if ($this->required && $this->default === null) { throw new InputException('--' . $this->name . ' is required'); }
             $value = $this->default;
@@ -38,6 +42,7 @@ final class Option
             if ($this->implicit === null) { throw new InputException('--' . $this->name . ' requires a value'); }
             $value = $this->implicit;
         }
+        // 先转换类型再调用自定义校验，保证校验器接收到整数、布尔等明确类型。
         if ($value !== null) {
             $value = match ($this->type) {
                 'bool' => filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE)
