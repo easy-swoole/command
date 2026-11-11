@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use EasySwoole\Command\Console\Selection\Choice;
+use EasySwoole\Command\Console\Selection\SelectionState;
 
 foreach ([['enter'], ['down', 'enter'], ['toggle', 'down', 'toggle', 'enter'], ['a', 'enter']] as $keys) {
     test('keyboard selection ' . implode(',', $keys), function () use ($keys) {
@@ -78,4 +79,23 @@ test('unicode search and backspace', function () {
     $t = new FakeTerminal(); $t->keys = ['/', '测', '试', 'backspace', 'enter', 'enter'];
     $r = console($t)->select('选择', [new Choice('a', '开发', 1), new Choice('b', '测试', 2)]);
     same([2], $r->values());
+});
+
+test('selection unicode backspace exposes all matching choices', function () {
+    $state = new SelectionState([new Choice('a', '测试', 2), new Choice('b', '测验', 3)], false);
+    foreach (['/', '测', '试', 'backspace', 'enter', 'down'] as $key) { same(null, $state->handle($key)); }
+    same([3], $state->handle('enter')->values());
+});
+
+test('selection search keeps hidden selections and toggles only visible choices', function () {
+    $state = new SelectionState([new Choice('a', 'Alpha', 1), new Choice('b', 'Beta', 2)], true);
+    foreach (['toggle', '/', 'B', 'enter', 'a'] as $key) { $state->handle($key); }
+    same([1, 2], $state->handle('enter')->values());
+});
+
+test('selection empty search and EOF have distinct results', function () {
+    $state = new SelectionState([new Choice('a', 'Alpha', 1)], true);
+    foreach (['/', 'Z', 'enter'] as $key) { $state->handle($key); }
+    same('cancelled', $state->handle('enter')->state);
+    same('eof', (new SelectionState([], false))->handle(null)->state);
 });

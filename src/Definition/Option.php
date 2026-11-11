@@ -62,12 +62,12 @@ final class Option
     private function integerValue(mixed $value): int
     {
         if (!preg_match('/^-?\d+$/D', (string)$value)) { throw new InputException('--' . $this->name . ' must be an integer'); }
-        $number = filter_var((string)$value, FILTER_VALIDATE_INT);
-        // 接受带前导零的整数，同时保留溢出检查。
-        if ($number === false) {
-            $normalized = ltrim((string)$value, '0');
-            $number = filter_var($normalized === '' ? '0' : $normalized, FILTER_VALIDATE_INT);
-        }
+        // 分离符号后消除前导零，再检查平台整数边界，避免提前强转导致溢出。
+        $text = (string)$value;
+        $negative = str_starts_with($text, '-');
+        $digits = ltrim($negative ? substr($text, 1) : $text, '0');
+        $normalized = ($negative && $digits !== '' ? '-' : '') . ($digits === '' ? '0' : $digits);
+        $number = filter_var($normalized, FILTER_VALIDATE_INT);
         if ($number === false) { throw new InputException('--' . $this->name . ' is out of integer range'); }
         return $number;
     }

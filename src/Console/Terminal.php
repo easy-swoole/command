@@ -16,6 +16,7 @@ class Terminal
     private static ?self $owner = null;
     private ?string $savedMode = null;
     private bool $opened = false;
+    private bool $screenAttempted = false;
     private bool $shutdownRegistered = false;
     private array $signalHandlers = [];
     private ?bool $asyncSignals = null;
@@ -37,24 +38,58 @@ class Terminal
         if (!$this->supported()) { throw new TerminalException('an interactive terminal is required'); }
         $saved = $this->command(['-g']);
         if (!$saved) { throw new TerminalException('cannot read terminal mode'); }
-        // 关闭行缓冲、输入回显及终端按键信号转换，由事件循环解释方向键与 Ctrl+C。
-        if ($this->command(['-icanon', '-echo', '-isig', '-ixon', 'min', '1', 'time', '0']) === null) {
-            $this->command([$saved]); throw new TerminalException('cannot enable keyboard input');
+        // 先取得所有权并记录原始模式，后续任一步骤失败均由本驱动回滚。
+        $this->savedMode = $saved;
+        $this->opened = true;
+        self::$owner = $this;
+        try {
+            if (!$this->shutdownRegistered) {
+                register_shutdown_function([$this, 'close']);
+                $this->shutdownRegistered = true;
+            }
+            $this->installSignals();
+            // 先安装清理机制，再切换原始模式，缩短异常或信号导致终端残留的窗口。
+            if ($this->command(['-icanon', '-echo', '-isig', '-ixon', 'min', '1', 'time', '0']) === null) {
+                throw new TerminalException('cannot enable keyboard input');
+            }
+            // 输出可能只完成一部分，必须在尝试切屏前记录恢复责任。
+            $this->screenAttempted = true;
+            $this->write("\033[?1049h\033[?25l");
+        } catch (\Throwable $error) {
+            // 优先保留打开失败的原始异常；屏幕输出失败也不能跳过输入和信号恢复。
+            try { $this->close(); }
+            catch (TerminalException $cleanup) {
+                // 输入模式无法恢复时禁止退回行输入，避免仍处于原始模式却继续提示用户。
+                throw new \RuntimeException('terminal rollback failed: ' . $cleanup->getMessage(), 0, $error);
+            }
+            catch (\Throwable) {}
+            throw $error;
         }
-        $this->savedMode = $saved; $this->opened = true; self::$owner = $this;
-        if (!$this->shutdownRegistered) { register_shutdown_function([$this, 'close']); $this->shutdownRegistered = true; }
-        $this->installSignals();
-        // 进入备用屏幕并隐藏光标；退出时恢复原屏幕，保留用户之前的终端内容。
-        $this->write("\033[?1049h\033[?25l");
     }
-    /** 关闭操作可重复调用，供正常退出、异常清理与进程结束回调共用。 */
+
+    /** 幂等关闭，各清理阶段使用 finally，避免中途失败导致占用状态遗留。 */
     public function close(): void
     {
         if (!$this->opened) { return; }
-        $saved = $this->savedMode; $this->savedMode = null; $this->opened = false; self::$owner = null;
-        try { if ($saved !== null) { $this->command([$saved]); } }
-        finally { $this->restoreSignals(); $this->write("\033[?25h\033[?1049l"); }
+        $saved = $this->savedMode;
+        $this->savedMode = null;
+        $this->opened = false;
+        try {
+            if ($saved !== null && $this->command([$saved]) === null) {
+                throw new TerminalException('cannot restore terminal mode');
+            }
+        } finally {
+            try { $this->restoreSignals(); }
+            finally {
+                self::$owner = null;
+                if ($this->screenAttempted) {
+                    $this->screenAttempted = false;
+                    $this->write("\033[?25h\033[?1049l");
+                }
+            }
+        }
     }
+
     private function installSignals(): void
     {
         if (!function_exists('pcntl_signal_get_handler') || !function_exists('pcntl_async_signals')) { return; }
@@ -129,19 +164,11 @@ class Terminal
     public static function clean(string $text): string { return preg_replace('/[\x00-\x1f\x7f]/', '?', $text); }
     public static function width(string $text): int
     {
-        if (function_exists('mb_strwidth')) { return mb_strwidth($text, 'UTF-8'); }
-        return array_sum(array_map(static fn ($c) => strlen($c) > 1 ? 2 : 1, preg_split('//u', $text, -1, PREG_SPLIT_NO_EMPTY) ?: []));
+        return mb_strwidth($text, 'UTF-8');
     }
     public static function fit(string $text, int $width): string
     {
-        if (function_exists('mb_strimwidth')) { return mb_strimwidth($text, 0, max(0, $width), '', 'UTF-8'); }
-        $result = '';
-        foreach (preg_split('//u', $text, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $char) {
-            $width -= strlen($char) > 1 ? 2 : 1;
-            if ($width < 0) { break; }
-            $result .= $char;
-        }
-        return $result;
+        return mb_strimwidth($text, 0, max(0, $width), '', 'UTF-8');
     }
     public function frame(string $text): void
     {

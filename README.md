@@ -1,6 +1,6 @@
 # Command 3.x
 
-独立的 PHP 8.1+ 命令执行与终端交互组件，无需依赖 EasySwoole 主框架、Swoole 扩展或依赖注入容器。3.x 使用全新的 PHP 接口，不兼容 2.x 接口。
+需要 PHP 8.1+ 和 mbstring 扩展的独立命令执行与终端交互组件，无需依赖 EasySwoole 主框架、Swoole 扩展或依赖注入容器。3.x 使用全新的 PHP 接口，不兼容 2.x 接口。
 
 ## 目录结构
 
@@ -15,7 +15,8 @@ src/
 │   ├── Console.php          # 终端输出与交互入口
 │   ├── Terminal.php         # 终端驱动及会话管理
 │   ├── Color.php            # 颜色工具
-│   ├── Selection/           # 选择项和选择结果
+│   ├── Live/                # 实时刷新状态与终端事件循环
+│   ├── Selection/           # 选择状态、按键循环、选择项与结果
 │   └── View/                # 视图契约与表格视图
 ├── Exception/               # 输入、终端及中断异常
 └── Result/                  # 命令执行结果
@@ -135,6 +136,10 @@ $console->live(
 
 原始键盘会话需要 POSIX 终端及 stty。其他交互终端使用编号选择；非交互输入要求显式传入参数。实时视图要求输入和输出均支持终端交互。重定向后的普通输出不包含 ANSI 颜色控制序列。会话会在退出、异常及已处理的信号中恢复终端输入模式、光标和屏幕。可选的 pcntl 扩展用于处理外部信号清理，普通命令和键盘取消操作不依赖该扩展。
 
+实时刷新由 LiveState 管理快照、刷新期限和重绘条件，由 LiveRunner 处理终端事件。选择交互由 SelectionState 管理搜索和多选，由 SelectionRunner 处理绘制与按键。Console 统一负责会话与降级，调用方式保持不变。业务查询仍是同步回调，调用方应为网络请求配置超时。
+
+表格只处理可视区域内的行，并依据终端宽度分配列空间。长列会截断以保留其他列；极窄视口无法显示全部列时，仍保证输出不超过宽度。
+
 输入输出流和 `Terminal` 均可注入，便于测试。`Terminal::now()` 提供可替换的单调时钟。同一时间只允许一个原始终端会话处于活动状态。
 
 ## 运行示例与测试
@@ -144,8 +149,7 @@ composer install
 php examples/console.php demo console
 php examples/console.php demo console --live
 composer test
-php -n tests/run.php
 python3 tests/terminal_test.py # 可选：运行 POSIX 真实终端回归测试。
 ```
 
-`tests/run.php` 无需第三方测试库或 Swoole 即可运行。server、process 和 Bridge 等业务管理逻辑由宿主应用或其组件实现。
+`tests/run.php` 需要 mbstring，无需第三方测试库或 Swoole 即可运行。server、process 和 Bridge 等业务管理逻辑由宿主应用或其组件实现。

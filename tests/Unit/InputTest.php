@@ -50,3 +50,22 @@ test('required argument and option', function () {
     raises(fn () => $p->bind($d, ['y' => 'yes']), InputException::class);
     same('ok', $p->bind($d, ['y' => 'yes'], [['ok', false]])->argument('x'));
 });
+
+test('all paths beginning with reserved help are rejected', function () {
+    foreach ([['help'], ['help', 'cache'], ['help cache clear']] as $path) {
+        raises(fn () => CommandDefinition::named(...$path), InvalidArgumentException::class);
+    }
+    same('cache help', CommandDefinition::named('cache', 'help')->name);
+});
+
+test('signed leading zero integers retain boundary checks', function () {
+    $option = Option::integer('number');
+    foreach (['-0012' => -12, '-000' => 0, '000' => 0, '0012' => 12] as $raw => $expected) {
+        same($expected, $option->bind((string)$raw, true));
+    }
+    same(PHP_INT_MIN, $option->bind('-000' . substr((string)PHP_INT_MIN, 1), true));
+    same(PHP_INT_MAX, $option->bind('000' . PHP_INT_MAX, true));
+    foreach (['999999999999999999999', '-999999999999999999999'] as $value) {
+        raises(fn () => $option->bind($value, true), InputException::class);
+    }
+});

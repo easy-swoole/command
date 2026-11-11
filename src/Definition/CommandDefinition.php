@@ -16,7 +16,8 @@ final class CommandDefinition
     public static function named(string ...$path): self
     {
         $name = implode(' ', $path);
-        if (!preg_match('/^[A-Za-z][A-Za-z0-9_-]*(?: [A-Za-z][A-Za-z0-9_-]*)*$/D', $name) || $name === 'help') {
+        // 根路径 help 由应用入口处理，允许注册会造成命令无法执行；子路径 help 不受影响。
+        if (!preg_match('/^[A-Za-z][A-Za-z0-9_-]*(?: [A-Za-z][A-Za-z0-9_-]*)*$/D', $name) || explode(' ', $name)[0] === 'help') {
             throw new \InvalidArgumentException('invalid or reserved command name: ' . $name);
         }
         return new self($name);

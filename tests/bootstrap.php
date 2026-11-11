@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+if (!extension_loaded('mbstring')) { throw new RuntimeException('command requires ext-mbstring'); }
+
 // 测试入口独立注册自动加载，无需 Composer 或 Swoole。
 spl_autoload_register(static function (string $class): void {
     $prefix = 'EasySwoole\\Command\\';
