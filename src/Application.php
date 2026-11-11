@@ -9,65 +9,78 @@ use EasySwoole\Command\Contracts\CommandInterface;
 use EasySwoole\Command\Contracts\CommandProviderInterface;
 use EasySwoole\Command\Exception\InputException;
 use EasySwoole\Command\Exception\InterruptedException;
+use EasySwoole\Command\Help\HelpFormatter;
 use EasySwoole\Command\Input\InputParser;
 use EasySwoole\Command\Result\CommandResult;
 
-/** 组织解析、校验、中间件与命令执行；具体业务初始化由宿主应用通过中间件接入。 */
+/** 应用只组织定义解析、帮助与执行，业务初始化通过宿主中间件接入。 */
 class Application
 {
     private CommandRegistry $registry;
     private array $middleware = [];
+
     public function __construct(private string $name = 'console', ?CommandRegistry $registry = null)
     { $this->registry = $registry ?? new CommandRegistry(); }
+
     public function registry(): CommandRegistry { return $this->registry; }
     public function addCommand(CommandInterface $command): void { $this->registry->add($command); }
     public function addProvider(CommandProviderInterface $provider): void { $this->registry->addProvider($provider); }
-    /** 中间件接收命令定义、已校验的输入、控制台及返回 CommandResult 的 next 回调。 */
+
+    /** 中间件接收顶层命令定义、已绑定输入、控制台和 next；可从 Input::action() 获取选中的操作。 */
     public function middleware(callable $middleware): void { $this->middleware[] = $middleware; }
-    /** 分发命令并返回结果，不自动输出结果消息；argv 不包含脚本名称。 */
+
+    /** argv 不含脚本名称；帮助和输入校验均先于命令工厂和中间件。 */
     public function dispatch(array $argv, ?Console $console = null): CommandResult
     {
         $console ??= new Console();
-        // 在应用边界统一转换退出码；分发只返回结果，由 run 决定输出到标准输出或标准错误。
         try {
             $help = false;
             if (($argv[0] ?? null) === 'help') { array_shift($argv); $help = true; }
             $parser = new InputParser();
-            [$definition, $options, $words, $path] = $parser->parse($argv, $this->registry);
+            $parsed = $parser->parse($argv, $this->registry);
+            $options = $parsed->options;
             $help = $help || array_key_exists('help', $options);
             unset($options['help']);
-            // 仅命令组名称匹配时展示帮助；未知路径报错，避免误执行其他操作。
-            if ($definition === null) {
-                $prefix = implode(' ', $path);
-                $matches = array_filter($this->registry->definitions(), static fn ($d) => $prefix === '' || str_starts_with($d->name, $prefix . ' '));
-                if (!$matches) { throw new InputException('unknown command: ' . $prefix); }
+            $formatter = new HelpFormatter();
+            if ($parsed->commandName === null) {
                 if ($options) { throw new InputException('unexpected option --' . array_key_first($options)); }
-                return CommandResult::success($this->help($matches));
+                return CommandResult::success($formatter->overview($this->name, $this->registry->definitions()));
             }
-            // 帮助先于参数绑定与工厂调用，缺少必填值也可查看帮助，且不会创建业务依赖。
+            $definition = $parsed->command;
+            if ($definition === null) { throw new InputException('unknown command: ' . $parsed->commandName); }
+            if ($parsed->actionName !== null && $parsed->action === null) {
+                throw new InputException('unknown action: ' . $parsed->actionName . ' on ' . $definition->name);
+            }
             if ($help) {
-                if ($words) { throw new InputException('unexpected command or argument in help request'); }
-                return CommandResult::success($this->help([$definition]));
+                if ($parsed->words) { throw new InputException('unexpected argument in help request'); }
+                return CommandResult::success($formatter->command($definition, $parsed->action));
             }
-            // 在执行中间件之前完成校验，防止无效输入触发框架初始化或网络连接。
-            $input = $parser->bind($definition, $options, $words);
-            // 同一次分发复用一个延迟创建的命令实例，避免实时刷新反复构建依赖。
+            if ($definition->hasActions() && $parsed->action === null) {
+                if ($options || $parsed->words) { throw new InputException('action is required for ' . $definition->name); }
+                return CommandResult::success($formatter->command($definition));
+            }
+            $input = $parser->bind($parsed->action ?? $definition, $options, $parsed->words, $definition->name, $parsed->actionName);
+            // 一个顶层命令只实例化一次，多次刷新可复用自身依赖与操作处理器。
             $command = null;
             $next = function () use ($definition, $input, $console, &$command): CommandResult {
                 $command ??= $this->registry->create($definition->name);
                 return $command->execute($input, $console);
             };
-            // 倒序包裹回调，使最先注册的中间件最先进入、最后退出。
             foreach (array_reverse($this->middleware) as $middleware) {
                 $inner = $next;
                 $next = fn () => $middleware($definition, $input, $console, $inner);
             }
             return $next();
-        } catch (InterruptedException $error) { return CommandResult::failure($error->getMessage(), 128 + $error->signal); }
-        catch (InputException $error) { return CommandResult::failure($error->getMessage(), 2); }
-        catch (\Throwable $error) { return CommandResult::failure($error->getMessage()); }
+        } catch (InterruptedException $error) {
+            return CommandResult::failure($error->getMessage(), 128 + $error->signal);
+        } catch (InputException $error) {
+            return CommandResult::failure($error->getMessage(), 2);
+        } catch (\Throwable $error) {
+            return CommandResult::failure($error->getMessage());
+        }
     }
-    /** 命令行入口：输出结果消息并返回进程退出码。 */
+
+    /** 在命令行边界输出结果，业务错误写入标准错误流。 */
     public function run(array $argv, ?Console $console = null): int
     {
         $console ??= new Console();
@@ -76,21 +89,5 @@ class Application
             $console->line($result->message, $result->exitCode !== 0);
         }
         return $result->exitCode;
-    }
-    private function help(array $definitions): string
-    {
-        $lines = [$this->name, ''];
-        foreach ($definitions as $definition) {
-            $lines[] = $definition->name . '  ' . $definition->summary();
-            foreach ($definition->options() as $option) {
-                $suffix = $option->type === 'bool' ? '[=bool]' : '=<' . $option->type . '>';
-                $lines[] = '  --' . $option->name . $suffix . '  ' . $option->description . ($option->required ? ' (required)' : '');
-            }
-            foreach ($definition->arguments() as $argument) {
-                $lines[] = '  ' . ($argument->required ? '<' : '[') . $argument->name . ($argument->required ? '>' : ']') . '  ' . $argument->description;
-            }
-        }
-        $lines[] = '  --help  Show help';
-        return implode(PHP_EOL, $lines);
     }
 }

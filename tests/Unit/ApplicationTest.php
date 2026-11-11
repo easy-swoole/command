@@ -11,7 +11,7 @@ test('unknown action does not run default', fn () => same(2, app()->dispatch(['d
 
 test('help bypasses factory, validation and middleware', function () {
     $a = new Application(); $made = 0; $initialized = 0;
-    $d = CommandDefinition::named('needs')->option(Option::string('secret', required: true));
+    $d = CommandDefinition::create('needs')->option(Option::string('secret', required: true));
     $a->registry()->register($d, function () use (&$made) { ++$made; throw new RuntimeException(); });
     $a->middleware(function () use (&$initialized) { ++$initialized; });
     same(0, $a->dispatch(['needs', '--help'])->exitCode);
@@ -21,7 +21,7 @@ test('help bypasses factory, validation and middleware', function () {
 
 test('group and root help', function () {
     same(0, app()->dispatch([])->exitCode); same(0, app()->dispatch(['demo'])->exitCode);
-    same(true, str_contains(app()->dispatch(['demo'])->message, 'demo run'));
+    same(true, str_contains(app()->dispatch(['demo'])->message, 'current support action is:'));
     same(2, app()->dispatch(['help', 'demo', 'typo'])->exitCode);
 });
 
@@ -32,7 +32,7 @@ test('middleware order', function () {
 });
 
 test('factory exception boundary', function () {
-    $a = new Application(); $a->registry()->register(CommandDefinition::named('bad'), fn () => throw new RuntimeException('offline'));
+    $a = new Application(); $a->registry()->register(CommandDefinition::create('bad'), fn () => throw new RuntimeException('offline'));
     same(1, $a->dispatch(['bad'])->exitCode); same('offline', $a->dispatch(['bad'])->message);
 });
 
@@ -48,7 +48,7 @@ test('redirect strips ANSI', function () {
 });
 
 test('interrupted result has signal exit code', function () {
-    $a = new Application(); $a->registry()->register(CommandDefinition::named('interrupt'), fn () => throw new \EasySwoole\Command\Exception\InterruptedException(15));
+    $a = new Application(); $a->registry()->register(CommandDefinition::create('interrupt'), fn () => throw new \EasySwoole\Command\Exception\InterruptedException(15));
     same(143, $a->dispatch(['interrupt'])->exitCode);
 });
 

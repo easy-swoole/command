@@ -11,7 +11,12 @@ final class Input
         private readonly array $options = [],
         private readonly array $arguments = [],
         private readonly array $provided = [],
+        private readonly ?string $command = null,
+        private readonly ?string $action = null,
     ) {}
+    /** 已解析的命令和操作上下文；独立命令的操作为 null。 */
+    public function command(): ?string { return $this->command; }
+    public function action(): ?string { return $this->action; }
     public function option(string $name): mixed { return $this->options[$name] ?? null; }
     public function argument(string $name): mixed { return $this->arguments[$name] ?? null; }
     public function provided(string $name): bool { return array_key_exists($name, $this->provided); }

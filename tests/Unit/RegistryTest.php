@@ -16,7 +16,7 @@ test('registration collisions and explicit replace', function () {
 
 test('registration definition snapshot', function () {
     $a = new Application(); $d = (new DemoCommand())->definition(); $a->registry()->register($d, fn () => new DemoCommand());
-    $d->option(Option::flag('later'));
+    $d->actions()['run']->option(Option::flag('later'));
     same(2, $a->dispatch(['demo', 'run', '--later'])->exitCode);
 });
 
@@ -29,6 +29,6 @@ test('provider injection', function () {
 });
 
 test('factory mismatch', function () {
-    $a = new Application(); $a->registry()->register(CommandDefinition::named('bad'), fn () => new DemoCommand());
+    $a = new Application(); $a->registry()->register(CommandDefinition::create('bad'), fn () => new DemoCommand());
     same(1, $a->dispatch(['bad'])->exitCode);
 });

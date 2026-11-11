@@ -1,6 +1,50 @@
 # Command 3.x
 
-需要 PHP 8.1+ 和 mbstring 扩展的独立命令执行与终端交互组件，无需依赖 EasySwoole 主框架、Swoole 扩展或依赖注入容器。3.x 使用全新的 PHP 接口，不兼容 2.x 接口。
+需要 PHP 8.1+ 和 mbstring 扩展的独立命令执行与终端交互组件，无需依赖 EasySwoole 主框架、Swoole 扩展或依赖注入容器。3.x 使用全新 PHP 接口，不兼容 2.x 接口。
+
+## 命令与操作
+
+一个 CommandDefinition 描述一个顶层命令，例如 cache、server 或 install；通过 ActionDefinition 声明该命令的多个操作。
+
+- 不带命令：列出顶层命令及其描述。
+- 仅输入 cache：列出 cache 的操作、说明和参数。
+- 输入 cache clear：校验 clear 的参数，然后执行。
+- 输入 cache clear --help 或 help cache clear：只显示 clear 的帮助。
+- 输入 install：直接执行没有操作列表的独立命令。
+
+create 只接收一个名称，不再接收完整路径或多个路径段。命令和操作名称均不包含空格；根名称 help 为保留入口，但操作可以命名为 help。
+
+包含操作的命令，选项和位置参数必须定义在各个 action 上；独立命令则直接在 CommandDefinition 上声明输入。两种模式不能混用，操作之间的参数互不影响。未知操作会返回输入错误，不会回退执行其他方法。
+
+## 定义一个支持多个操作的命令
+
+先定义带校验的选项，再分别定义操作，最后组装命令，避免把多层定义嵌套在同一条链中：
+
+```php
+$store = Option::string('store', '缓存存储名称', required: true);
+$store = $store->validate(static function (string $value): bool|string {
+    return preg_match('/\S/u', $value) === 1 ? true : '--store 不能为空';
+});
+
+$clear = ActionDefinition::create('clear');
+$clear->description('清理缓存');
+$clear->option($store);
+
+$warmup = ActionDefinition::create('warmup');
+$warmup->description('预热缓存');
+$warmup->option($store);
+
+$command = CommandDefinition::create('cache');
+$command->description('缓存管理');
+$command->action($clear);
+$command->action($warmup);
+```
+
+- [CacheCommand](examples/Cache/CacheCommand.php)：完整命令定义，分发及各 action 的独立方法。
+- [MemoryCache](examples/Cache/MemoryCache.php)：演示用缓存依赖。
+- [cache.php](examples/cache.php)：仅负责依赖组装、注册和执行的入口。
+
+没有操作列表的命令直接使用 CommandDefinition::create('install') 定义，可在其上添加选项和位置参数。帮助从注册的定义读取，不调用工厂和 execute；execute 中的 Input::action() 为 null，无需伪造 default 操作。
 
 ## 目录结构
 
@@ -9,8 +53,9 @@ src/
 ├── Application.php          # 应用入口与执行流程
 ├── CommandRegistry.php      # 命令注册与延迟创建
 ├── Contracts/               # 命令与组件注册契约
-├── Definition/              # 命令、选项和参数定义
-├── Input/                   # 输入解析与参数绑定
+├── Definition/              # 命令、操作与共用输入规则
+├── Input/                   # 解析结果、执行上下文与参数绑定
+├── Help/                    # 顶层、命令及操作帮助
 ├── Console/
 │   ├── Console.php          # 终端输出与交互入口
 │   ├── Terminal.php         # 终端驱动及会话管理
@@ -29,50 +74,6 @@ tests/
 └── terminal_test.py         # 真实终端交互测试
 ```
 
-## 定义与注入命令
-
-```php
-use EasySwoole\Command\Application;
-use EasySwoole\Command\Console\Console;
-use EasySwoole\Command\Contracts\CommandInterface;
-use EasySwoole\Command\Definition\CommandDefinition;
-use EasySwoole\Command\Definition\Option;
-use EasySwoole\Command\Input\Input;
-use EasySwoole\Command\Result\CommandResult;
-
-final class CacheClearCommand implements CommandInterface
-{
-    public function __construct(private CacheManager $cache) {}
-
-    public function definition(): CommandDefinition
-    {
-        return CommandDefinition::named('cache', 'clear')
-            ->description('清理缓存数据')
-            ->option(Option::string('store', default: 'default'));
-    }
-
-    public function execute(Input $input, Console $console): CommandResult
-    {
-        $this->cache->clear($input->option('store'));
-        return CommandResult::success('缓存已清理');
-    }
-}
-
-$app = new Application('我的应用');
-$app->addCommand(new CacheClearCommand($cache));
-exit($app->run(array_slice($argv, 1)));
-```
-
-```sh
-php console.php cache clear --store=redis
-php console.php cache clear --help
-php console.php help cache
-```
-
-传给 `run()` 和 `dispatch()` 的参数不包含脚本名称。命令路径可以包含一个或多个单词。仅输入命令组时显示帮助，未知操作不会回退执行其他命令。
-
-`run()` 将结果消息输出到标准输出或标准错误，并返回退出码；`dispatch()` 返回 `CommandResult`，不自动输出其中的消息。执行期间仍可通过控制台输出进度或读取交互输入。退出码：0 成功，1 执行失败，2 输入错误；安装 pcntl 扩展时，被外部信号中断的会话返回 128 + 信号编号。
-
 ## 输入定义
 
 - `Option::string()`、`integer()`、`number()` 和 `flag()` 将输入转换为对应类型。
@@ -85,7 +86,22 @@ php console.php help cache
 - `Argument` 声明位置参数，也支持原有的 `name=value` 命名参数形式。`--` 之后的内容按字面值作为位置参数处理。
 - 命令和选项名称区分大小写，`help` 和 `--help` 为保留名称。
 
+参数是否必传和参数值是否为空需要分别判断：
+
+- required: true 且没有默认值：未传 --store 时返回输入错误。
+- 只传 --store、不提供值：字符串选项会提示必须提供值。
+- 传 --store= 或 --store="   "：通过 validate 拒绝空字符串和纯空白（包括全角空格）。
+- validate 返回 true 表示通过；返回错误字符串或 false 表示失败。
+- 字符串 "0" 是合法的非空值，示例不使用 empty() 判断。
+- 校验在业务执行前完成，失败时不会清理或预热缓存。
+
 输入校验和帮助处理早于命令工厂与执行中间件。读取命令定义时不应初始化应用或产生其他副作用。
+
+## 输入解析与执行结果
+
+传给 run 和 dispatch 的参数不包含脚本名称。InputParser 返回 ParsedInput，分别保存命令定义、操作定义、原始名称和剩余参数，不创建业务实例。
+
+dispatch 返回 CommandResult，不自动输出结果消息；run 将成功消息写到标准输出、错误消息写到标准错误，并返回退出码。命令也可通过 Console 主动输出进度。退出码：0 成功、1 执行错误、2 输入错误；pcntl 可用时，外部信号中断返回 128 + 信号编号。
 
 ## 组件注册与延迟工厂
 
@@ -93,14 +109,19 @@ php console.php help cache
 
 ```php
 $app->registry()->register(
-    CacheClearCommand::createDefinition(), // 在命令类中实现这个静态定义工厂。
-    fn () => new CacheClearCommand($container->get(CacheManager::class)),
+    CacheCommand::createDefinition(), // 在命令类中实现这个静态定义工厂。
+    fn () => new CacheCommand(new MemoryCache()),
 );
 ```
 
-使用延迟注册时，让 `definition()` 调用同一个静态定义工厂。重复注册相同命令路径会立即报错，替换已有命令必须显式调用 `registry()->replace($definition, $factory)`。
+使用延迟注册时，让 `definition()` 调用同一个静态定义工厂。重复注册同名命令会立即报错，替换已有命令必须显式调用 `registry()->replace($definition, $factory)`。
 
 执行中间件接收 `(CommandDefinition $definition, Input $input, Console $console, callable $next)`，返回 `CommandResult`。宿主应用可依据命令定义中的元数据初始化运行环境。中间件按注册顺序包裹命令执行，帮助请求和输入错误不会进入执行中间件。
+
+
+一个顶层命令只需注册一次，其多个操作随定义注册。execute 通过 Input::action() 获取已经解析并校验的操作名称；独立命令的操作为 null。Input::command() 返回顶层名称。
+
+中间件接收顶层 CommandDefinition，通过 actionDefinition($input->action()) 获取操作定义。宿主可以优先读取操作元数据，再回退到命令元数据。同一次分发中只创建一个命令实例，实时刷新可重复执行它。
 
 ## 终端交互
 
@@ -146,10 +167,14 @@ $console->live(
 
 ```sh
 composer install
+php examples/cache.php
+php examples/cache.php cache
+php examples/cache.php cache clear --store=default
+php examples/cache.php cache warmup --store=redis
 php examples/console.php demo console
 php examples/console.php demo console --live
 composer test
-python3 tests/terminal_test.py # 可选：运行 POSIX 真实终端回归测试。
+python3 tests/terminal_test.py
 ```
 
-`tests/run.php` 需要 mbstring，无需第三方测试库或 Swoole 即可运行。server、process 和 Bridge 等业务管理逻辑由宿主应用或其组件实现。
+examples/cache.php 和 examples/console.php 只保留入口代码；命令和依赖分别放在 Cache/ 与 Console/ 目录，一份文件只定义一个类。缓存示例要求显式提供非空的 --store，可将演示内存缓存替换为实际业务依赖。测试需要 mbstring，无需第三方测试库或 Swoole。server、process 和 Bridge 等业务管理逻辑由宿主应用或其组件实现。

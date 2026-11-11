@@ -45,7 +45,7 @@ test('unknown named argument', fn () => same(2, app()->dispatch(['demo', 'run', 
 test('duplicate named argument', fn () => same(2, app()->dispatch(['demo', 'run', 'name=x', 'name=y'])->exitCode));
 
 test('required argument and option', function () {
-    $p = new InputParser(); $d = CommandDefinition::named('a')->argument(new Argument('x', required: true))->option(Option::string('y', required: true));
+    $p = new InputParser(); $d = CommandDefinition::create('a')->argument(new Argument('x', required: true))->option(Option::string('y', required: true));
     raises(fn () => $p->bind($d, []), InputException::class);
     raises(fn () => $p->bind($d, ['y' => 'yes']), InputException::class);
     same('ok', $p->bind($d, ['y' => 'yes'], [['ok', false]])->argument('x'));
@@ -53,9 +53,9 @@ test('required argument and option', function () {
 
 test('all paths beginning with reserved help are rejected', function () {
     foreach ([['help'], ['help', 'cache'], ['help cache clear']] as $path) {
-        raises(fn () => CommandDefinition::named(...$path), InvalidArgumentException::class);
+        raises(fn () => CommandDefinition::create(...$path), InvalidArgumentException::class);
     }
-    same('cache help', CommandDefinition::named('cache', 'help')->name);
+    same('help', \EasySwoole\Command\Definition\ActionDefinition::create('help')->name);
 });
 
 test('signed leading zero integers retain boundary checks', function () {

@@ -11,7 +11,7 @@ use EasySwoole\Command\Definition\CommandDefinition;
 /** 保存命令定义与工厂，允许组件注册命令，而无需绑定宿主的依赖注入容器。 */
 final class CommandRegistry
 {
-    /** @var array<string, array{CommandDefinition, \Closure}> 命令完整路径对应定义快照和延迟工厂。 */
+    /** @var array<string, array{CommandDefinition, \Closure}> 顶层命令名称对应定义快照和延迟工厂。 */
     private array $entries = [];
     public function add(CommandInterface $command): void
     { $this->register($command->definition(), static fn () => $command); }
@@ -33,6 +33,7 @@ final class CommandRegistry
     { return array_map(static fn ($entry) => clone $entry[0], $this->entries); }
     public function create(string $name): CommandInterface
     {
+        if (!isset($this->entries[$name])) { throw new \LogicException('unknown command: ' . $name); }
         $command = ($this->entries[$name][1])();
         // 校验延迟工厂的产物，避免执行到另一个路径对应的命令。
         if (!$command instanceof CommandInterface || $command->definition()->name !== $name) {

@@ -5,42 +5,38 @@ declare(strict_types=1);
 namespace EasySwoole\Command\Input;
 
 use EasySwoole\Command\CommandRegistry;
-use EasySwoole\Command\Definition\CommandDefinition;
+use EasySwoole\Command\Definition\InputDefinition;
 use EasySwoole\Command\Exception\InputException;
 
 final class InputParser
 {
-    /**
-     * 第一阶段只拆分词元并定位命令，不做类型转换或业务初始化。
-     * argv 不包含脚本名称；优先匹配已注册的最长命令路径。
-     *
-     * @return array{?CommandDefinition, array, array, array} 命令定义、原始选项、剩余参数及全部非选项词元。
-     */
-    public function parse(array $tokens, CommandRegistry $registry): array
+    /** 先拆分词元，再按显式命令和操作定义定位；该阶段不创建命令实例。 */
+    public function parse(array $tokens, CommandRegistry $registry): ParsedInput
     {
         $options = []; $words = []; $literal = false;
         foreach ($tokens as $token) {
             if (!is_string($token)) { throw new InputException('argv must contain strings'); }
-            // 终止符之后保留字面值标记，防止以短横线开头或包含等号的参数被再次解释。
             if (!$literal && $token === '--') { $literal = true; continue; }
             if (!$literal && str_starts_with($token, '-') && $token !== '-') {
                 [$name, $value] = array_pad(explode('=', ltrim($token, '-'), 2), 2, null);
                 if ($name === '') { throw new InputException('invalid option'); }
-                $options[$name] = $value; // 保留原有命令行语义：重复选项取最后一次传入的值。
+                $options[$name] = $value;
             } else { $words[] = [$token, $literal]; }
         }
-        // 按路径长度选择最具体的命令，例如同时存在 cache 与 cache clear 时优先后者。
-        $definitions = $registry->definitions(); $matched = null; $length = 0;
-        foreach ($definitions as $definition) {
-            $path = explode(' ', $definition->name);
-            if (count($path) > $length && array_column(array_slice($words, 0, count($path)), 0) === $path) {
-                $matched = $definition; $length = count($path);
-            }
+        $first = array_shift($words);
+        if ($first !== null && $first[1]) { throw new InputException('command name must precede --'); }
+        $commandName = $first[0] ?? null;
+        $command = $commandName === null ? null : ($registry->definitions()[$commandName] ?? null);
+        $actionName = null;
+        $action = null;
+        if ($command?->hasActions() && $words && !$words[0][1]) {
+            $actionName = array_shift($words)[0];
+            $action = $command->actionDefinition($actionName);
         }
-        return [$matched, $options, array_slice($words, $length), array_column($words, 0)];
+        return new ParsedInput($commandName, $command, $actionName, $action, $options, $words);
     }
     /** 第二阶段依据命令定义拒绝未知字段、绑定类型，并检查必填项与多余参数。 */
-    public function bind(CommandDefinition $definition, array $options, array $words = []): Input
+    public function bind(InputDefinition $definition, array $options, array $words = [], ?string $command = null, ?string $action = null): Input
     {
         $bound = []; $arguments = []; $positional = [];
         foreach ($options as $name => $_) {
@@ -65,6 +61,6 @@ final class InputParser
             if ($argument->required && $arguments[$name] === null) { throw new InputException('argument ' . $name . ' is required'); }
         }
         if ($positional) { throw new InputException('unexpected argument: ' . $positional[0]); }
-        return new Input($bound, $arguments, $options);
+        return new Input($bound, $arguments, $options, $command, $action);
     }
 }
