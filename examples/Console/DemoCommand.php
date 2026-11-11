@@ -6,6 +6,7 @@ namespace EasySwoole\Command\Examples\Console;
 
 use EasySwoole\Command\Application;
 use EasySwoole\Command\Console\Console;
+use EasySwoole\Command\Console\Color;
 use EasySwoole\Command\Console\Selection\Choice;
 use EasySwoole\Command\Console\View\TableView;
 use EasySwoole\Command\Contracts\CommandInterface;
@@ -40,7 +41,8 @@ final class DemoCommand implements CommandInterface
         if ($input->option('live')) {
             $frame = 0;
             $console->live(function () use (&$frame) {
-                return new TableView(['Application', 'Frame', 'Time'], [[$this->applicationName, ++$frame, date('H:i:s')]]);
+                $row = [$this->applicationName, ++$frame, Color::green('running'), date('H:i:s')];
+                return new TableView(['Application', 'Frame', 'Status', 'Time'], [$row]);
             }, interval: .5);
             return CommandResult::success();
         }

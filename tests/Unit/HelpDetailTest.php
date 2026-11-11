@@ -54,3 +54,15 @@ test('single command lookup returns isolated action and example snapshots', func
     same(null, $app->registry()->definition('missing'));
     raises(fn () => $definition->example('   '), InvalidArgumentException::class);
 });
+
+test('help renders repeated input and substitutes invalid UTF8 defaults', function () {
+    $definition = CommandDefinition::create('demo')->option(Option::integer('id', required: true)->multiple())
+        ->option(Option::string('prefix', default: "\xff"));
+    $app = new Application();
+    $app->registry()->register($definition, static fn () => throw new LogicException('help must not create a command'));
+    $result = $app->dispatch(['demo', '--help']);
+    same(0, $result->exitCode);
+    same(true, str_contains($result->message, '--id=<int>...'));
+    same(true, str_contains($result->message, '[multiple] (required)'));
+    same(true, str_contains($result->message, '�'));
+});

@@ -6,7 +6,7 @@ use EasySwoole\Command\Definition\Argument;
 use EasySwoole\Command\Definition\CommandDefinition;
 use EasySwoole\Command\Definition\Option;
 use EasySwoole\Command\Exception\InputException;
-use EasySwoole\Command\Input\InputParser;
+use EasySwoole\Command\Input\InputBinder;
 
 test('typed input and legacy single dash', function () {
     $r = app()->dispatch(['demo', 'run', '-d', '-force=false', '--mode=produce', '--pid=0012', 'name=hello']);
@@ -45,10 +45,10 @@ test('unknown named argument', fn () => same(2, app()->dispatch(['demo', 'run', 
 test('duplicate named argument', fn () => same(2, app()->dispatch(['demo', 'run', 'name=x', 'name=y'])->exitCode));
 
 test('required argument and option', function () {
-    $p = new InputParser(); $d = CommandDefinition::create('a')->argument(new Argument('x', required: true))->option(Option::string('y', required: true));
-    raises(fn () => $p->bind($d, []), InputException::class);
-    raises(fn () => $p->bind($d, ['y' => 'yes']), InputException::class);
-    same('ok', $p->bind($d, ['y' => 'yes'], [['ok', false]])->argument('x'));
+    $binder = new InputBinder(); $d = CommandDefinition::create('a')->argument(new Argument('x', required: true))->option(Option::string('y', required: true));
+    raises(fn () => $binder->bind($d, []), InputException::class);
+    raises(fn () => $binder->bind($d, ['y' => 'yes']), InputException::class);
+    same('ok', $binder->bind($d, ['y' => 'yes'], [['ok', false]])->argument('x'));
 });
 
 test('all paths beginning with reserved help are rejected', function () {
@@ -68,4 +68,21 @@ test('signed leading zero integers retain boundary checks', function () {
     foreach (['999999999999999999999', '-999999999999999999999'] as $value) {
         raises(fn () => $option->bind($value, true), InputException::class);
     }
+});
+
+test('argument presence distinguishes defaults named and positional values', function () {
+    $definition = CommandDefinition::create('demo')->option(Option::string('target', default: 'default'))
+        ->argument(Argument::string('target', default: 'default'))->argument(Argument::integer('count', default: 2));
+    $binder = new InputBinder();
+    $input = $binder->bind($definition, []);
+    same(['target' => 'default', 'count' => 2], $input->arguments());
+    same(false, $input->argumentProvided('target')); same(false, $input->argumentProvided('count'));
+    $input = $binder->bind($definition, ['target' => 'default'], [['default', false], ['count=2', false]]);
+    same(true, $input->argumentProvided('target')); same(true, $input->argumentProvided('count'));
+    same(true, $input->optionProvided('target')); same(true, $input->provided('target'));
+    same(false, $input->argumentProvided('missing'));
+    $input = $binder->bind($definition, [], [['target=', false]]);
+    same('', $input->argument('target')); same(true, $input->argumentProvided('target'));
+    same(false, $input->optionProvided('target')); same(false, $input->provided('target'));
+    same(false, $input->argumentProvided('count'));
 });

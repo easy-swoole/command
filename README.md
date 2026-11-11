@@ -55,16 +55,18 @@ src/
 ├── CommandRegistry.php      # 命令注册与延迟创建
 ├── Contracts/               # 命令与组件注册契约
 ├── Definition/              # 命令、操作与共用输入规则
-├── Input/                   # 解析结果、执行上下文与参数绑定
+├── Input/                   # 命令解析、字段绑定、类型转换与输入来源
 ├── Help/                    # 顶层、命令及操作帮助
-├── Validation/              # 共用类型转换与可复用校验规则
+├── Validation/              # 不可变校验链与可复用校验规则
 ├── Event/                   # 提供给宿主的异常上下文
 ├── Console/
 │   ├── Console.php          # 终端输出与交互入口
 │   ├── Terminal.php         # 终端驱动及会话管理
 │   ├── Color.php            # 颜色工具
+│   ├── Text.php             # 样式过滤、可见宽度及安全截断
+│   ├── Input/               # 完整按键及 UTF-8 输入读取
 │   ├── Live/                # 实时刷新状态与终端事件循环
-│   ├── Selection/           # 选择状态、按键循环、选择项与结果
+│   ├── Selection/           # 选择状态、布局渲染、事件循环与结果
 │   └── View/                # 视图契约与表格视图
 ├── Exception/               # 输入、终端及中断异常
 └── Result/                  # 命令执行结果
@@ -85,7 +87,7 @@ tests/
 - 支持 `--name=value` 和原有的 `-name=value`。带值选项使用 =，不支持通过空格分隔选项和值，也不支持合并多个短选项。
 - 布尔开关支持 `--force`、`--force=true` 和 `--force=false`。
 - 数值选项可声明省略值时使用的隐式值，例如 `Option::number('watch', implicit: 2)`。
-- 重复选项取最后一次传入的值。未知选项和多余参数会返回输入错误。
+- 普通重复选项取最后一次传入的值；通过 multiple 显式开启的多值选项收集全部值。未知选项和多余参数会返回输入错误。
 - `Argument::string()`、`integer()`、`number()` 和 `boolean()` 声明带类型的位置参数，也支持原有的 `name=value` 命名参数形式。`--` 之后的内容按字面值作为位置参数处理。
 - 命令和选项名称区分大小写，`help` 和 `--help` 为保留名称。
 
@@ -129,6 +131,42 @@ $clear->argument($count);
 
 位置参数也会在执行前转换和校验。例如 count=3 或位置参数 3 都会绑定为整数；多余参数和转换失败返回退出码 2。
 
+默认值与隐式值在定义阶段完成类型检查和规范化；数值参数拒绝 INF、-INF 和 NAN。自定义校验仍在分发时执行，不在定义阶段调用。位置参数按实际是否必填检查顺序：有默认值的参数不能放在无默认值的必填参数之前。
+
+### 多值选项与输入来源
+
+```php
+$ids = Option::integer('id', '目标编号', required: true);
+$ids = $ids->multiple();
+$ids = $ids->validate(Rules::range(1, 1000, '目标编号超出范围'));
+$action->option($ids);
+```
+
+传入 --id=1 --id=2 时，option('id') 返回整数列表 [1, 2]。每次出现都必须通过类型转换与值校验，保留传入顺序和重复值；不会自动拆分逗号。布尔或数值选项可以使用各自声明的隐式值；没有隐式值的选项不可省略值。
+
+multiple 返回新定义，原定义不变。无默认值的多值选项未传时返回 []；multiple([1, 2]) 指定默认列表，不传列表时将已有标量默认值保留为单元素列表。required 且默认列表为空时，至少提供一个值；非空默认列表仍需逐项校验。validate 对每个元素执行，整个列表的数量或关联约束使用 validateInput。
+
+Input::options() 和 arguments() 分别返回全部绑定选项与位置参数。provided() 与 optionProvided() 都判断选项是否显式传入；argumentProvided() 判断位置参数是否显式传入，位置形式和 name=value 形式均会记录。即使用户传入的值恰好等于默认值，来源判断仍为 true。
+
+### 整组输入校验
+
+```php
+use EasySwooleCommandInputInput;
+
+$action->option(Option::flag('all', '处理全部目标'));
+$action->option(Option::string('store', '指定缓存存储'));
+$action->validateInput(static function (Input $input): bool|string {
+    if ($input->option('all') && $input->provided('store')) {
+        return '--all 与 --store 不能同时使用';
+    }
+    return true;
+});
+```
+
+所有字段完成类型转换及单字段校验后，整组规则按添加顺序执行，首条失败立即停止。规则接收 Input，返回 true 通过，返回 false 或错误字符串表示输入失败，退出码为 2。该阶段仍早于命令工厂与中间件；帮助请求不会执行规则。
+
+有 Action 的命令在对应 ActionDefinition 上声明 validateInput；独立命令直接在 CommandDefinition 上声明。命令分组不能声明输入或整组规则，避免规则被静默忽略。与 InputDefinition 的其他构建方法一样，validateInput 修改当前定义并返回自身；注册后的规则受定义快照隔离。
+
 ### 分层帮助
 
 顶层帮助列出命令，命令分组帮助列出操作与参数。具体操作和独立命令的详细帮助增加 Usage、类型、实际必填标记、默认值、隐式值与示例。
@@ -143,7 +181,9 @@ example 保存完整调用形式，不参与解析。用 php examples/cache.php 
 
 ## 输入解析与执行结果
 
-传给 run 和 dispatch 的参数不包含脚本名称。InputParser 返回 ParsedInput，分别保存命令定义、操作定义、原始名称和剩余参数，不创建业务实例。
+传给 run 和 dispatch 的参数不包含脚本名称。InputParser 只拆分词元、定位命令及操作，返回 ParsedInput，不创建业务实例。InputBinder 再根据所选定义绑定字段，记录输入来源，并执行字段及整组校验。
+
+ValueConverter 只负责类型转换和默认值规范化；ValidationChain 只负责规则追加与失败短路，Option、Argument 和整组输入共用同一套校验语义。校验链不可变，追加规则不会修改其他定义或已注册快照。
 
 dispatch 返回 CommandResult，不自动输出结果消息；run 将成功消息写到标准输出、错误消息写到标准错误，并返回退出码。命令也可通过 Console 主动输出进度。退出码：0 成功、1 执行错误、2 输入错误；pcntl 可用时，外部信号中断返回 128 + 信号编号。
 
@@ -208,7 +248,7 @@ if (!$result->cancelled() && $console->confirm('是否继续？', default: false
 }
 ```
 
-每个选项具有稳定且唯一的 ID。选择结果区分 selected（已选择）、cancelled（已取消）和 eof（输入流关闭）。方向键移动，空格切换选中状态，a 切换全部可见选项，/ 进入搜索，回车确认，q、Esc 或 Ctrl+C 取消。搜索模式下可输入文字，按回车返回导航模式。长列表会在终端可视区域内滚动。
+每个选项具有稳定且唯一的 ID。选择结果区分 selected（已选择）、cancelled（已取消）和 eof（输入流关闭）。方向键移动，Home/End 跳到首项或取消项，PageUp/PageDown 按可见页移动，空格切换选中状态，a 切换全部可见选项，/ 进入搜索，回车确认，q、Esc 或 Ctrl+C 取消。搜索模式下可输入文字，按回车返回导航模式。长列表会在终端可视区域内滚动。小高度或窄终端自动使用紧凑布局，省略描述并保留取消入口。按键读取器会完整消费 CSI/SS3 序列，Delete 等按键不会留下残余字符污染搜索。
 
 ```php
 use EasySwoole\Command\Console\View\TableView;
@@ -223,11 +263,15 @@ $console->live(
 
 原始键盘会话需要 POSIX 终端及 stty。其他交互终端使用编号选择；非交互输入要求显式传入参数。实时视图要求输入和输出均支持终端交互。重定向后的普通输出不包含 ANSI 颜色控制序列。会话会在退出、异常及已处理的信号中恢复终端输入模式、光标和屏幕。可选的 pcntl 扩展用于处理外部信号清理，普通命令和键盘取消操作不依赖该扩展。
 
-实时刷新由 LiveState 管理快照、刷新期限和重绘条件，由 LiveRunner 处理终端事件。选择交互由 SelectionState 管理搜索和多选，由 SelectionRunner 处理绘制与按键。Console 统一负责会话与降级，调用方式保持不变。业务查询仍是同步回调，调用方应为网络请求配置超时。
+实时刷新由 LiveState 管理快照、刷新期限和重绘条件，由 LiveRunner 处理终端事件。选择交互由 SelectionState 管理游标、搜索和多选，SelectionRenderer 负责普通及紧凑布局，SelectionRunner 协调尺寸、页大小、绘制与按键。渲染不会改变选择状态，翻页步长由事件循环显式设置。Console 统一负责会话与降级，调用方式保持不变。业务查询仍是同步回调，调用方应为网络请求配置超时。
+
+普通输出、表格和实时视图共用 Text 的样式处理。可以通过 Color::green 等方法生成颜色，宽度计算忽略样式码，截断时自动复位，避免颜色影响后续单元格。只保留 SGR 样式，清屏、移动光标和 OSC 等控制序列会被过滤；NO_COLOR 与 TERM=dumb 同样作用于实时视图。
 
 表格只处理可视区域内的行，并依据终端宽度分配列空间。长列会截断以保留其他列；极窄视口无法显示全部列时，仍保证输出不超过宽度。
 
 输入输出流和 `Terminal` 均可注入，便于测试。`Terminal::now()` 提供可替换的单调时钟。同一时间只允许一个原始终端会话处于活动状态。
+
+测试用例按职责组织：输入绑定与来源判断放在 InputTest，多值选项放在 MultipleOptionTest，校验放在 ValidationTest，键盘字节流放在 KeyboardTest，选择行为及布局放在 SelectionTest。可复用的流准备放在 tests/Support，不在某个测试文件中定义跨文件辅助函数。
 
 ## 运行示例与测试
 

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 use EasySwoole\Command\Console\Selection\Choice;
 use EasySwoole\Command\Console\Selection\SelectionState;
+use EasySwoole\Command\Console\Selection\SelectionRenderer;
+use EasySwoole\Command\Console\Terminal;
 
 foreach ([['enter'], ['down', 'enter'], ['toggle', 'down', 'toggle', 'enter'], ['a', 'enter']] as $keys) {
     test('keyboard selection ' . implode(',', $keys), function () use ($keys) {
@@ -98,4 +100,37 @@ test('selection empty search and EOF have distinct results', function () {
     foreach (['/', 'Z', 'enter'] as $key) { $state->handle($key); }
     same('cancelled', $state->handle('enter')->state);
     same('eof', (new SelectionState([], false))->handle(null)->state);
+});
+
+test('selection uses home end and page keys without changing selected identities', function () {
+    $choices = [];
+    for ($i = 0; $i < 20; ++$i) { $choices[] = new Choice($i, 'Item ' . $i, $i); }
+    $state = new SelectionState($choices, true);
+    $renderer = new SelectionRenderer();
+    $state->setPageSize($renderer->pageSize(12, 80)); // 三个可见选项构成一页。
+    $state->handle('toggle'); $state->handle('pageDown'); $state->handle('toggle');
+    $state->handle('pageDown'); $state->handle('pageUp');
+    same([0, 3], $state->handle('enter')->values());
+    $state = new SelectionState($choices, false);
+    $state->setPageSize($renderer->pageSize(5, 30)); // 紧凑布局的一页为两个选项。
+    $state->handle('pageDown'); same([2], $state->handle('enter')->values());
+    $state->handle('end'); same('cancelled', $state->handle('enter')->state);
+    $state->handle('home'); same([0], $state->handle('enter')->values());
+});
+
+test('selection respects viewport height and keeps cancellation visible in compact layouts', function () {
+    $choices = [new Choice('a', 'Alpha', 1), new Choice('b', 'Beta', 2)];
+    foreach (range(2, 12) as $rows) {
+        foreach ([12, 30, 80] as $columns) {
+            $state = new SelectionState($choices, false);
+            $frame = (new SelectionRenderer())->render('Choose', $state, $rows, $columns);
+            same(true, count(explode("\n", $frame)) <= $rows - 1);
+            foreach (explode("\n", $frame) as $line) { same(true, Terminal::width($line) <= $columns - 1); }
+            if ($rows < 8 || $columns < 50) { same(true, str_contains($frame, 'q Cancel')); }
+            else { same(true, str_contains($frame, '[0] Cancel')); }
+            $state->handle('up');
+            same('cancelled', $state->handle('enter')->state);
+        }
+    }
+    same('', (new SelectionRenderer())->render('Choose', new SelectionState($choices, false), 1, 80));
 });

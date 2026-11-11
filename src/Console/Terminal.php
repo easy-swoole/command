@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace EasySwoole\Command\Console;
 
+use EasySwoole\Command\Console\Input\KeyReader;
 use EasySwoole\Command\Exception\InterruptedException;
 use EasySwoole\Command\Exception\TerminalException;
 
@@ -20,6 +21,7 @@ class Terminal
     private bool $shutdownRegistered = false;
     private array $signalHandlers = [];
     private ?bool $asyncSignals = null;
+    private ?KeyReader $keyboard = null;
     private array $lastSize = [24, 80];
     private float $lastSizeAt = -INF;
     public function __construct($input = null, $output = null)
@@ -30,6 +32,7 @@ class Terminal
         return PHP_OS_FAMILY !== 'Windows' && function_exists('proc_open') && $this->interactive()
             && stream_isatty($this->output) && getenv('TERM') !== 'dumb';
     }
+    public function supportsColor(): bool { return Text::supportsColor($this->output); }
     public function write(string $text): void { fwrite($this->output, $text); }
     public function readLine(): ?string { $line = fgets($this->input); return $line === false ? null : $line; }
     public function open(): void
@@ -39,6 +42,7 @@ class Terminal
         $saved = $this->command(['-g']);
         if (!$saved) { throw new TerminalException('cannot read terminal mode'); }
         // 先取得所有权并记录原始模式，后续任一步骤失败均由本驱动回滚。
+        $this->keyboard = null;
         $this->savedMode = $saved;
         $this->opened = true;
         self::$owner = $this;
@@ -74,6 +78,7 @@ class Terminal
         $saved = $this->savedMode;
         $this->savedMode = null;
         $this->opened = false;
+        $this->keyboard = null;
         try {
             if ($saved !== null && $this->command([$saved]) === null) {
                 throw new TerminalException('cannot restore terminal mode');
@@ -128,53 +133,30 @@ class Terminal
     }
     public function wait(float $seconds): bool
     {
+        if ($this->keyboard?->hasBufferedInput()) { return true; }
         $read = [$this->input]; $write = $except = []; $seconds = max(0, $seconds);
         return @stream_select($read, $write, $except, (int)$seconds, (int)(($seconds - (int)$seconds) * 1e6)) === 1;
     }
     public function key(): ?string
     {
-        $char = fgetc($this->input);
-        if ($char === false) { return null; }
-        $byte = ord($char);
-        // 拼接完整 UTF-8 字符，避免中文搜索按字节拆分；不完整输入采用有限等待。
-        if ($byte >= 0xc2 && $byte <= 0xf4) {
-            $length = $byte < 0xe0 ? 2 : ($byte < 0xf0 ? 3 : 4);
-            $character = $char;
-            for ($index = 1; $index < $length; ++$index) {
-                if (!$this->wait(.05)) { return 'ignore'; }
-                $next = fgetc($this->input);
-                if ($next === false || (ord($next) & 0xc0) !== 0x80) { return 'ignore'; }
-                $character .= $next;
-            }
-            return preg_match('//u', $character) === 1 ? $character : 'ignore';
-        }
-        // Esc 既可独立表示取消，也可能是方向键序列的前缀，通过短等待区分。
-        if ($char === "\033") {
-            if (!$this->wait(.05)) { return 'cancel'; }
-            $prefix = fgetc($this->input);
-            if (($prefix !== '[' && $prefix !== 'O') || !$this->wait(.05)) { return 'cancel'; }
-            return match (fgetc($this->input)) { 'A' => 'up', 'B' => 'down', default => 'ignore' };
-        }
-        return match ($char) {
-            "\r", "\n" => 'enter', ' ' => 'toggle', "\177", "\010" => 'backspace',
-            "\003", "\004", "\032" => 'cancel', default => $char,
-        };
+        $this->keyboard ??= new KeyReader($this->input, fn (float $seconds) => $this->wait($seconds));
+        return $this->keyboard->read();
     }
     public function now(): float { return hrtime(true) / 1e9; }
-    public static function clean(string $text): string { return preg_replace('/[\x00-\x1f\x7f]/', '?', $text); }
+    public static function clean(string $text): string { return Text::clean($text); }
     public static function width(string $text): int
     {
-        return mb_strwidth($text, 'UTF-8');
+        return Text::width($text);
     }
     public static function fit(string $text, int $width): string
     {
-        return mb_strimwidth($text, 0, max(0, $width), '', 'UTF-8');
+        return Text::fit($text, $width);
     }
     public function frame(string $text): void
     {
         [$height, $width] = $this->dimensions();
         // 裁剪视口并预留边缘单元格，防止自动换行或滚屏破坏后续原地绘制。
-        $lines = array_slice(explode("\n", str_replace("\r", '', $text)), 0, max(1, $height - 1));
-        $this->write("\033[H\033[J" . implode("\n", array_map(static fn ($line) => self::fit(self::clean($line), $width - 1), $lines)));
+        $lines = array_slice(explode("\n", str_replace("\r", '', $text)), 0, max(0, $height - 1));
+        $this->write("\033[H\033[J" . implode("\n", array_map(fn ($line) => Text::fit($line, $width - 1, $this->supportsColor()), $lines)));
     }
 }

@@ -11,6 +11,7 @@ use EasySwoole\Command\Definition\CommandDefinition;
 use EasySwoole\Command\Definition\Option;
 use EasySwoole\Command\Input\Input;
 use EasySwoole\Command\Input\InputParser;
+use EasySwoole\Command\Input\InputBinder;
 use EasySwoole\Command\Result\CommandResult;
 
 function cacheApplication(): array
@@ -134,7 +135,7 @@ test('parser exposes command and action definitions without factory execution', 
     $parsed = $parser->parse(['cache', 'warmup', '--count=4'], $app->registry());
     same('cache', $parsed->command->name);
     same('warmup', $parsed->action->name);
-    $input = $parser->bind($parsed->action, $parsed->options, $parsed->words, $parsed->commandName, $parsed->actionName);
+    $input = (new InputBinder())->bind($parsed->action, $parsed->options, $parsed->words, $parsed->commandName, $parsed->actionName);
     same('warmup', $input->action());
     same(4, $input->option('count'));
     same([], $cache->calls);

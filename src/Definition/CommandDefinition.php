@@ -20,7 +20,7 @@ final class CommandDefinition extends InputDefinition
 
     public function action(ActionDefinition $action): self
     {
-        if ($this->options() || $this->arguments()) {
+        if ($this->options() || $this->arguments() || $this->hasInputValidators()) {
             throw new \LogicException('a command with actions cannot declare standalone input');
         }
         if (isset($this->actions[$action->name])) {
@@ -40,6 +40,12 @@ final class CommandDefinition extends InputDefinition
     {
         $this->assertStandalone();
         return parent::argument($argument);
+    }
+
+    public function validateInput(callable $validator): static
+    {
+        $this->assertStandalone();
+        return parent::validateInput($validator);
     }
 
     private function assertStandalone(): void

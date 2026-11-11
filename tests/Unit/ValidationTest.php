@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 use EasySwoole\Command\Application;
 use EasySwoole\Command\Definition\Argument;
+use EasySwoole\Command\Definition\ActionDefinition;
 use EasySwoole\Command\Definition\CommandDefinition;
 use EasySwoole\Command\Definition\Option;
 use EasySwoole\Command\Exception\InputException;
+use EasySwoole\Command\Input\Input;
+use EasySwoole\Command\Input\InputBinder;
 use EasySwoole\Command\Result\CommandResult;
 use EasySwoole\Command\Validation\Rules;
 
@@ -112,4 +115,64 @@ test('argument validation fails before command execution', function () {
 
 test('argument definition rejects unsupported types', function () {
     raises(fn () => new Argument('x', type: 'unknown'), InvalidArgumentException::class);
+});
+
+test('whole input rules see bound typed inputs and stop before factory or middleware', function () {
+    $action = ActionDefinition::create('run')->option(Option::integer('count', default: 2))
+        ->argument(Argument::integer('limit', default: 1));
+    $calls = [];
+    $action->validateInput(function (Input $input) use (&$calls): bool|string {
+        $calls[] = [$input->command(), $input->action(), $input->option('count'), $input->argument('limit')];
+        return $input->option('count') <= $input->argument('limit') ? true : 'count exceeds limit';
+    });
+    $action->validateInput(function (Input $input) use (&$calls) { $calls[] = 'second'; return true; });
+    $app = new Application(); $created = 0; $initialized = 0;
+    $definition = CommandDefinition::create('demo')->action($action);
+    $app->registry()->register($definition, function () use (&$created, $definition) {
+        ++$created; return new CallbackCommand($definition, static fn () => CommandResult::success());
+    });
+    $app->middleware(function ($d, $i, $c, $next) use (&$initialized) { ++$initialized; return $next(); });
+    same(2, $app->dispatch(['demo', 'run'])->exitCode);
+    same([['demo', 'run', 2, 1]], $calls); same(0, $created); same(0, $initialized);
+    $calls = [];
+    same(0, $app->dispatch(['demo', 'run', 'limit=3'])->exitCode);
+    same([['demo', 'run', 2, 3], 'second'], $calls); same(1, $created); same(1, $initialized);
+    $calls = [];
+    same(0, $app->dispatch(['demo', 'run', '--help'])->exitCode); same([], $calls);
+    same(2, $app->dispatch(['demo', 'run', '--count=invalid'])->exitCode); same([], $calls);
+});
+
+test('whole rules support standalone commands and are isolated in snapshots', function () {
+    $definition = CommandDefinition::create('demo')->validateInput(static fn (Input $input) => true);
+    $app = new Application();
+    $app->addCommand(new CallbackCommand($definition, static fn () => CommandResult::success()));
+    $definition->validateInput(static fn () => 'must not leak');
+    $snapshot = $app->registry()->definition('demo');
+    $snapshot->validateInput(static fn () => 'must not leak either');
+    same(0, $app->dispatch(['demo'])->exitCode);
+    $invalid = CommandDefinition::create('invalid')->validateInput(static fn () => false);
+    raises(fn () => (new InputBinder())->bind($invalid, []), InputException::class);
+    raises(fn () => CommandDefinition::create('group')->action(ActionDefinition::create('run'))->validateInput(static fn () => true), LogicException::class);
+    raises(fn () => CommandDefinition::create('group')->validateInput(static fn () => true)->action(ActionDefinition::create('run')), LogicException::class);
+});
+
+test('numeric defaults and implicit values reject nonfinite values during definition', function () {
+    foreach ([INF, -INF, NAN] as $value) {
+        raises(fn () => Option::number('n', default: $value), InvalidArgumentException::class);
+        raises(fn () => Option::number('n', implicit: $value), InvalidArgumentException::class);
+        raises(fn () => Argument::number('n', default: $value), InvalidArgumentException::class);
+        raises(fn () => new Argument('n', default: $value, type: 'float'), InvalidArgumentException::class);
+    }
+    same(2.0, (new Argument('n', default: '2', type: 'float'))->default);
+    same('3', (new Argument('n', default: 3))->default);
+    raises(fn () => new Argument('n', default: []), InvalidArgumentException::class);
+    // 自定义规则仍在分发时执行，避免读取定义产生业务副作用。
+    $calls = 0;
+    Option::integer('n', default: 0)->validate(function () use (&$calls) { ++$calls; return false; });
+    same(0, $calls);
+});
+
+test('effective optional defaults cannot precede required positional arguments', function () {
+    raises(fn () => CommandDefinition::create('demo')->argument(Argument::string('first', default: 'x', required: true))
+        ->argument(Argument::string('last', required: true)), LogicException::class);
 });

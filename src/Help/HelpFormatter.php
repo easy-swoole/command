@@ -44,13 +44,13 @@ final class HelpFormatter
     {
         $usage = [$name];
         foreach ($definition->options() as $option) {
-            $label = $this->optionLabel($option);
-            $required = $option->required && $option->default === null;
+            $label = $this->optionLabel($option) . ($option->isMultiple ? '...' : '');
+            $required = $option->isRequired();
             $usage[] = $required ? $label : '[' . $label . ']';
         }
         foreach ($definition->arguments() as $argument) {
             $label = '<' . $argument->name . ':' . $argument->type . '>';
-            $usage[] = $argument->required && $argument->default === null ? $label : '[' . $label . ']';
+            $usage[] = $argument->isRequired() ? $label : '[' . $label . ']';
         }
         $usage[] = '[--help]';
         $lines = [$this->style($name, 'red') . '  ' . $definition->summary(), '', $this->style('Usage:', 'info') . ' ' . implode(' ', $usage), ''];
@@ -71,9 +71,10 @@ final class HelpFormatter
         foreach ($definition->options() as $option) {
             $label = ' ' . ($detailed ? $this->optionLabel($option) : '--' . $option->name);
             $description = $option->description;
-            if ($option->required && $option->default === null) { $description .= ' (required)'; }
+            if ($option->isMultiple) { $description .= ' [multiple]'; }
+            if ($option->isRequired()) { $description .= ' (required)'; }
             if ($detailed) {
-                if ($option->default !== null) { $description .= ' [default: ' . $this->value($option->default) . ']'; }
+                if ($option->default !== null && (!$option->isMultiple || $option->default !== [])) { $description .= ' [default: ' . $this->value($option->default) . ']'; }
                 if ($option->implicit !== null) { $description .= ' [implicit: ' . $this->value($option->implicit) . ']'; }
             }
             $lines[] = $this->column($label, 24, 'notice') . $description;
@@ -81,7 +82,7 @@ final class HelpFormatter
         foreach ($definition->arguments() as $argument) {
             $label = ' <' . $argument->name . ($detailed ? ':' . $argument->type : '') . '>';
             $description = $argument->description;
-            if ($argument->required && $argument->default === null) { $description .= ' (required)'; }
+            if ($argument->isRequired()) { $description .= ' (required)'; }
             if ($detailed && $argument->default !== null) { $description .= ' [default: ' . $this->value($argument->default) . ']'; }
             $lines[] = $this->column($label, 24, 'notice') . $description;
         }
@@ -100,7 +101,7 @@ final class HelpFormatter
 
     private function value(mixed $value): string
     {
-        return json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION | JSON_THROW_ON_ERROR);
+        return json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_PRESERVE_ZERO_FRACTION | JSON_INVALID_UTF8_SUBSTITUTE | JSON_THROW_ON_ERROR);
     }
 
     private function examples(InputDefinition $definition): array

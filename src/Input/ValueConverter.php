@@ -2,12 +2,12 @@
 
 declare(strict_types=1);
 
-namespace EasySwoole\Command\Validation;
+namespace EasySwoole\Command\Input;
 
 use EasySwoole\Command\Exception\InputException;
 
-/** 选项和位置参数共用类型转换及校验链，避免两种输入的边界规则不一致。 */
-final class ValueValidator
+/** 选项和位置参数共用的类型转换；默认值错误与用户输入错误分别报告。 */
+final class ValueConverter
 {
     public static function convert(mixed $value, string $type, string $label): mixed
     {
@@ -23,14 +23,13 @@ final class ValueValidator
         };
     }
 
-    /** @param list<\Closure> $validators 按添加顺序执行，首个失败立即中止。 */
-    public static function validate(mixed $value, array $validators, string $label): void
+    /** 默认值错误属于定义错误，提前拒绝非法数值，同时保留转换异常作为原因。 */
+    public static function defaultValue(mixed $value, string $type, string $label): mixed
     {
-        foreach ($validators as $validator) {
-            $valid = $validator($value);
-            if ($valid !== true) {
-                throw new InputException(is_string($valid) ? $valid : $label . ' is invalid');
-            }
+        if ($value === null) { return null; }
+        try { return self::convert($value, $type, $label); }
+        catch (InputException $error) {
+            throw new \InvalidArgumentException('invalid default for ' . $label . ': ' . $error->getMessage(), 0, $error);
         }
     }
 

@@ -14,10 +14,12 @@ final class SelectionRunner
     public function run(string $title, array $choices, bool $multiple): Selection
     {
         $state = new SelectionState($choices, $multiple);
+        $renderer = new SelectionRenderer();
         $previous = null;
         while (true) {
             [$rows, $columns] = $this->terminal->dimensions();
-            $frame = $state->render($title, $rows);
+            $state->setPageSize($renderer->pageSize($rows, $columns));
+            $frame = $renderer->render($title, $state, $rows, $columns);
             $signature = [$frame, $rows, $columns];
             if ($signature !== $previous) {
                 $this->terminal->frame($frame);

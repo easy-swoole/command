@@ -29,17 +29,14 @@ class Console
     /** 按实际输出流判断颜色能力，重定向、NO_COLOR 和简易终端统一使用纯文本。 */
     public function supportsColor(bool $error = false): bool
     {
-        return stream_isatty($error ? $this->error : $this->output)
-            && getenv('NO_COLOR') === false && getenv('TERM') !== 'dumb';
+        return Text::supportsColor($error ? $this->error : $this->output);
     }
     public function line(string $text = '', bool $error = false): void
     {
         // 活动视图独占屏幕；普通输出会破坏光标位置，因此要求回调返回待渲染内容。
         if ($this->active) { throw new \LogicException('return a view instead of writing during an interactive session'); }
         $stream = $error ? $this->error : $this->output;
-        if (!$this->supportsColor($error)) {
-            $text = preg_replace('/\x1b\[[0-?]*[ -\/]*[@-~]/', '', $text);
-        }
+        $text = Text::clean($text, $this->supportsColor($error), multiline: true);
         fwrite($stream, $text . PHP_EOL);
     }
     public function info(string $text): void { $this->line($text); }
@@ -50,7 +47,7 @@ class Console
     {
         if ($this->active) { throw new \LogicException('an interactive view is already active'); }
         if (!$this->interactive()) { throw new \RuntimeException('interactive input requires a terminal; pass explicit parameters'); }
-        fwrite($this->output, $question);
+        fwrite($this->output, Text::clean($question, $this->supportsColor(), multiline: true));
         return $this->terminal->readLine();
     }
     public function confirm(string $question, bool $default = false): bool

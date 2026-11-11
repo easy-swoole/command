@@ -12,6 +12,7 @@ use EasySwoole\Command\Exception\InputException;
 use EasySwoole\Command\Exception\InterruptedException;
 use EasySwoole\Command\Help\HelpFormatter;
 use EasySwoole\Command\Input\InputParser;
+use EasySwoole\Command\Input\InputBinder;
 use EasySwoole\Command\Result\CommandResult;
 
 /** 应用只组织定义解析、帮助与执行，业务初始化通过宿主中间件接入。 */
@@ -68,7 +69,7 @@ class Application
                 if ($options || $parsed->words) { throw new InputException('action is required for ' . $definition->name); }
                 return CommandResult::success($formatter->command($definition));
             }
-            $input = $parser->bind($parsed->action ?? $definition, $options, $parsed->words, $definition->name, $parsed->actionName);
+            $input = (new InputBinder())->bind($parsed->action ?? $definition, $options, $parsed->words, $definition->name, $parsed->actionName);
             // 一个顶层命令只实例化一次，多次刷新可复用自身依赖与操作处理器。
             $command = null;
             $next = function () use ($definition, $input, $console, &$command): CommandResult {

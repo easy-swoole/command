@@ -4,10 +4,13 @@ declare(strict_types=1);
 
 namespace EasySwoole\Command\Console\Selection;
 
+use EasySwoole\Command\Console\Text;
+
 /** 选择状态机：解释按键、搜索和多选，不直接读取终端，便于独立验证状态转换。 */
 final class SelectionState
 {
     private int $cursor = 0;
+    private int $pageSize = 10;
     private array $selected = [];
     private string $query = '';
     private bool $search = false;
@@ -17,11 +20,19 @@ final class SelectionState
     public function __construct(private readonly array $choices, private readonly bool $multiple) {}
 
     /** 仅搜索条件变化时重建索引；原始索引保持不变，隐藏的已选项不会丢失。 */
-    private function indices(): array
+    public function visibleIndices(): array
     {
         return $this->visible ??= array_keys(array_filter($this->choices, fn (Choice $choice) =>
-            $this->query === '' || mb_stripos($choice->label . ' ' . $choice->description, $this->query, 0, 'UTF-8') !== false));
+            $this->query === '' || mb_stripos(Text::clean($choice->label . ' ' . $choice->description, false), $this->query, 0, 'UTF-8') !== false));
     }
+
+    public function cursor(): int { return $this->cursor; }
+    public function query(): string { return $this->query; }
+    public function searching(): bool { return $this->search; }
+    public function choice(int $index): Choice { return $this->choices[$index]; }
+    public function isSelected(int $index): bool { return isset($this->selected[$index]); }
+    public function selectedCount(): int { return count($this->selected); }
+    public function setPageSize(int $size): void { $this->pageSize = max(1, $size); }
 
     public function handle(?string $key): ?Selection
     {
@@ -40,10 +51,16 @@ final class SelectionState
         }
         if ($key === '/') { $this->search = true; return null; }
 
-        $indices = $this->indices();
+        $indices = $this->visibleIndices();
         if ($key === 'up' || $key === 'down') {
             // 取消行也参与导航，空搜索结果仍然可以取消。
             $this->cursor = ($this->cursor + ($key === 'up' ? -1 : 1) + count($indices) + 1) % (count($indices) + 1);
+        } elseif (in_array($key, ['home', 'end', 'pageUp', 'pageDown'], true)) {
+            $this->cursor = match ($key) {
+                'home' => 0, 'end' => count($indices),
+                'pageUp' => max(0, $this->cursor - $this->pageSize),
+                'pageDown' => min(count($indices), $this->cursor + $this->pageSize),
+            };
         } elseif ($key === 'toggle' && isset($indices[$this->cursor])) {
             $index = $indices[$this->cursor];
             if (!$this->multiple) { $this->selected = [$index => true]; }
@@ -63,19 +80,4 @@ final class SelectionState
         return null;
     }
 
-    public function render(string $title, int $rows): string
-    {
-        $indices = $this->indices();
-        $limit = max(1, intdiv($rows - 6, 2));
-        $start = max(0, min($this->cursor - intdiv($limit, 2), count($indices) - $limit));
-        $lines = [$title, '↑/↓ Move  Space Toggle  a All/None  / Search  Enter Continue  q/Esc Cancel', 'Search: ' . $this->query];
-        foreach (array_slice($indices, $start, $limit, true) as $position => $index) {
-            $choice = $this->choices[$index];
-            $lines[] = ($this->cursor === $position ? '> ' : '  ') . '[' . (isset($this->selected[$index]) ? 'x' : ' ') . '] ' . $choice->label;
-            $lines[] = '    ' . $choice->description;
-        }
-        $lines[] = ($this->cursor === count($indices) ? '> ' : '  ') . '[0] Cancel';
-        $lines[] = 'Selected: ' . count($this->selected);
-        return implode("\n", $lines);
-    }
 }

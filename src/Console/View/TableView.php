@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace EasySwoole\Command\Console\View;
 
 use EasySwoole\Command\Console\Terminal;
+use EasySwoole\Command\Console\Text;
 
 final class TableView implements ViewInterface
 {
@@ -43,7 +44,7 @@ final class TableView implements ViewInterface
                 $value = Terminal::fit($row[$column] ?? '', $size);
                 $cells[] = $value . str_repeat(' ', max(0, $size - Terminal::width($value)));
             }
-            $lines[] = rtrim(implode(str_repeat(' ', $gap), $cells));
+            $lines[] = Text::trimEnd(implode(str_repeat(' ', $gap), $cells));
         }
         return implode(PHP_EOL, $lines);
     }
