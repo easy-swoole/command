@@ -4,7 +4,7 @@ namespace EasySwoole\Command;
 
 
 /**
- * Class Color
+ * 终端颜色工具。
  * @package EasySwoole\Command
  * @method static string black(string $text)
  * @method static string red(string $text)
@@ -34,7 +34,7 @@ class Color
         'brown' => '0;33',
         'blue' => '0;34',
         'cyan' => '0;36',
-        'normal' => '39',// no color
+        'normal' => '39',// 默认颜色
         'yellow' => '1;33',
         'magenta' => '1;35',
         'white' => '1;37',

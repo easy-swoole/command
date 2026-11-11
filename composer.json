@@ -1,16 +1,8 @@
 {
     "name": "easyswoole/command",
     "type": "library",
-    "description": "An efficient swoole framework",
-    "keywords" : ["swoole", "framework", "async","easyswoole"],
-    "homepage" : "https://www.easyswoole.com/",
-    "license" : "Apache-2.0",
-    "authors": [
-        {
-            "name": "YF",
-            "email": "291323003@qq.com"
-        }
-    ],
+    "description": "Standalone PHP command execution and interactive console",
+    "license": "Apache-2.0",
     "require": {
         "php": ">=8.1"
     },
@@ -19,7 +11,19 @@
             "EasySwoole\\Command\\": "src/"
         }
     },
-    "require-dev": {
-        "easyswoole/swoole-ide-helper": "^1.0"
-    }
+    "scripts": {
+        "test": "php tests/run.php"
+    },
+    "extra": {
+        "branch-alias": {
+            "dev-3.x": "3.x-dev"
+        }
+    },
+    "homepage": "https://www.easyswoole.com/",
+    "authors": [
+        {
+            "name": "YF",
+            "email": "291323003@qq.com"
+        }
+    ]
 }
