@@ -26,12 +26,18 @@ class Console
     }
     public function terminal(): Terminal { return $this->terminal; }
     public function interactive(): bool { return $this->terminal->interactive(); }
+    /** 按实际输出流判断颜色能力，重定向、NO_COLOR 和简易终端统一使用纯文本。 */
+    public function supportsColor(bool $error = false): bool
+    {
+        return stream_isatty($error ? $this->error : $this->output)
+            && getenv('NO_COLOR') === false && getenv('TERM') !== 'dumb';
+    }
     public function line(string $text = '', bool $error = false): void
     {
         // 活动视图独占屏幕；普通输出会破坏光标位置，因此要求回调返回待渲染内容。
         if ($this->active) { throw new \LogicException('return a view instead of writing during an interactive session'); }
         $stream = $error ? $this->error : $this->output;
-        if (!stream_isatty($stream) || getenv('NO_COLOR') !== false || getenv('TERM') === 'dumb') {
+        if (!$this->supportsColor($error)) {
             $text = preg_replace('/\x1b\[[0-?]*[ -\/]*[@-~]/', '', $text);
         }
         fwrite($stream, $text . PHP_EOL);

@@ -21,10 +21,11 @@ create 只接收一个名称，不再接收完整路径或多个路径段。命�
 先定义带校验的选项，再分别定义操作，最后组装命令，避免把多层定义嵌套在同一条链中：
 
 ```php
+use EasySwoole\Command\Definition\{ActionDefinition, CommandDefinition, Option};
+use EasySwoole\Command\Validation\Rules;
+
 $store = Option::string('store', '缓存存储名称', required: true);
-$store = $store->validate(static function (string $value): bool|string {
-    return preg_match('/\S/u', $value) === 1 ? true : '--store 不能为空';
-});
+$store = $store->validate(Rules::notBlank('--store 不能为空'));
 
 $clear = ActionDefinition::create('clear');
 $clear->description('清理缓存');
@@ -56,6 +57,8 @@ src/
 ├── Definition/              # 命令、操作与共用输入规则
 ├── Input/                   # 解析结果、执行上下文与参数绑定
 ├── Help/                    # 顶层、命令及操作帮助
+├── Validation/              # 共用类型转换与可复用校验规则
+├── Event/                   # 提供给宿主的异常上下文
 ├── Console/
 │   ├── Console.php          # 终端输出与交互入口
 │   ├── Terminal.php         # 终端驱动及会话管理
@@ -83,7 +86,7 @@ tests/
 - 布尔开关支持 `--force`、`--force=true` 和 `--force=false`。
 - 数值选项可声明省略值时使用的隐式值，例如 `Option::number('watch', implicit: 2)`。
 - 重复选项取最后一次传入的值。未知选项和多余参数会返回输入错误。
-- `Argument` 声明位置参数，也支持原有的 `name=value` 命名参数形式。`--` 之后的内容按字面值作为位置参数处理。
+- `Argument::string()`、`integer()`、`number()` 和 `boolean()` 声明带类型的位置参数，也支持原有的 `name=value` 命名参数形式。`--` 之后的内容按字面值作为位置参数处理。
 - 命令和选项名称区分大小写，`help` 和 `--help` 为保留名称。
 
 参数是否必传和参数值是否为空需要分别判断：
@@ -96,6 +99,47 @@ tests/
 - 校验在业务执行前完成，失败时不会清理或预热缓存。
 
 输入校验和帮助处理早于命令工厂与执行中间件。读取命令定义时不应初始化应用或产生其他副作用。
+
+### 组合校验规则
+
+Option 和 Argument 的 validate 都返回新定义，必须接收返回值。多次调用会按顺序追加规则，首个失败立即停止；原定义可以独立复用。规则接收类型转换后的值，返回 true 表示通过，返回 false 或错误字符串表示失败。
+
+```php
+use EasySwoole\Command\Definition\{ActionDefinition, Argument, Option};
+use EasySwoole\Command\Validation\Rules;
+
+$store = Option::string('store', '缓存存储名称', required: true);
+$store = $store->validate(Rules::notBlank('--store 不能为空'));
+$store = $store->validate(Rules::oneOf(['default', 'redis'], '不支持的缓存存储'));
+
+$count = Argument::integer('count', '处理数量', default: 100);
+$count = $count->validate(Rules::range(1, 1000, '处理数量应在 1 到 1000 之间'));
+
+$clear = ActionDefinition::create('clear');
+$clear->option($store);
+$clear->argument($count);
+```
+
+- notBlank 拒绝空字符串和 Unicode 纯空白，接受数字 0 和布尔值 false。
+- oneOf 严格比较值和类型，例如整数参数应传入整数枚举列表。
+- range 校验数值闭区间；定义时会检查上下界是否有效。
+- 没有提供、没有默认值的可选字段绑定为 null，不执行值校验器。因此可选字段可以使用带 string 或 int 类型声明的回调。
+- 默认值和省略选项值时使用的隐式值仍会执行类型转换与全部规则。布尔开关默认的 false 也会校验。
+- required 判断是否必须提供值；要拒绝空字符串，应再添加 notBlank。
+
+位置参数也会在执行前转换和校验。例如 count=3 或位置参数 3 都会绑定为整数；多余参数和转换失败返回退出码 2。
+
+### 分层帮助
+
+顶层帮助列出命令，命令分组帮助列出操作与参数。具体操作和独立命令的详细帮助增加 Usage、类型、实际必填标记、默认值、隐式值与示例。
+
+交互终端中，命令和操作名称使用红色，标题使用绿色，参数名称使用黄色。输出重定向、设置 NO_COLOR 或 TERM=dumb 时自动使用纯文本；对齐按未着色文字计算。
+
+```php
+$clear->example('php examples/cache.php cache clear --store=redis', '清理 Redis 缓存');
+```
+
+example 保存完整调用形式，不参与解析。用 php examples/cache.php cache clear --help 查看详情；读取帮助不会创建业务实例或校验业务参数。
 
 ## 输入解析与执行结果
 
@@ -114,6 +158,8 @@ $app->registry()->register(
 );
 ```
 
+按名称读取定义可使用 $app->registry()->definition('cache')，不存在时返回 null。返回值是隔离的定义快照，修改它不会影响注册内容；普通命令解析只复制匹配的定义，顶层列表才读取全部定义。
+
 使用延迟注册时，让 `definition()` 调用同一个静态定义工厂。重复注册同名命令会立即报错，替换已有命令必须显式调用 `registry()->replace($definition, $factory)`。
 
 执行中间件接收 `(CommandDefinition $definition, Input $input, Console $console, callable $next)`，返回 `CommandResult`。宿主应用可依据命令定义中的元数据初始化运行环境。中间件按注册顺序包裹命令执行，帮助请求和输入错误不会进入执行中间件。
@@ -122,6 +168,26 @@ $app->registry()->register(
 一个顶层命令只需注册一次，其多个操作随定义注册。execute 通过 Input::action() 获取已经解析并校验的操作名称；独立命令的操作为 null。Input::command() 返回顶层名称。
 
 中间件接收顶层 CommandDefinition，通过 actionDefinition($input->action()) 获取操作定义。宿主可以优先读取操作元数据，再回退到命令元数据。同一次分发中只创建一个命令实例，实时刷新可重复执行它。
+
+## 观察执行异常
+
+宿主可以通过 onException 接入自己的日志系统，无需让组件依赖日志库。观察器接收 ExceptionEvent，其中 error 是原始 Throwable，保留堆栈和 previous 异常链；command、action 与 input 表示已经成功解析或绑定的上下文。
+
+```php
+use EasySwoole\Command\Event\ExceptionEvent;
+
+$app->onException(static function (ExceptionEvent $event) use ($logger): void {
+    $logger->error($event->error->getMessage(), [
+        'exception' => $event->error,
+        'command' => $event->command,
+        'action' => $event->action,
+    ]);
+});
+```
+
+解析、校验、工厂、中间件与命令执行中抛出的异常都会通知观察器。早期解析失败时 command 和 action 可能为 null；绑定未完成时 input 为 null。成功、帮助请求以及主动返回 CommandResult::failure 的结果不会产生异常事件。
+
+可以注册多个观察器，按注册顺序调用。观察器自身抛出异常时继续通知其他观察器，保留原始错误消息与退出码；观察器不接管执行结果，也不用于恢复执行。
 
 ## 终端交互
 

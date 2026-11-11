@@ -7,6 +7,7 @@ namespace EasySwoole\Command;
 use EasySwoole\Command\Console\Console;
 use EasySwoole\Command\Contracts\CommandInterface;
 use EasySwoole\Command\Contracts\CommandProviderInterface;
+use EasySwoole\Command\Event\ExceptionEvent;
 use EasySwoole\Command\Exception\InputException;
 use EasySwoole\Command\Exception\InterruptedException;
 use EasySwoole\Command\Help\HelpFormatter;
@@ -18,6 +19,8 @@ class Application
 {
     private CommandRegistry $registry;
     private array $middleware = [];
+    /** @var list<\Closure(ExceptionEvent): void> */
+    private array $exceptionObservers = [];
 
     public function __construct(private string $name = 'console', ?CommandRegistry $registry = null)
     { $this->registry = $registry ?? new CommandRegistry(); }
@@ -29,10 +32,16 @@ class Application
     /** 中间件接收顶层命令定义、已绑定输入、控制台和 next；可从 Input::action() 获取选中的操作。 */
     public function middleware(callable $middleware): void { $this->middleware[] = $middleware; }
 
+    /** 观察异常而不接管执行结果；观察器自身失败不能覆盖原始错误。 */
+    public function onException(callable $observer): void
+    { $this->exceptionObservers[] = \Closure::fromCallable($observer); }
+
     /** argv 不含脚本名称；帮助和输入校验均先于命令工厂和中间件。 */
     public function dispatch(array $argv, ?Console $console = null): CommandResult
     {
         $console ??= new Console();
+        $parsed = null;
+        $input = null;
         try {
             $help = false;
             if (($argv[0] ?? null) === 'help') { array_shift($argv); $help = true; }
@@ -41,7 +50,7 @@ class Application
             $options = $parsed->options;
             $help = $help || array_key_exists('help', $options);
             unset($options['help']);
-            $formatter = new HelpFormatter();
+            $formatter = new HelpFormatter($console->supportsColor());
             if ($parsed->commandName === null) {
                 if ($options) { throw new InputException('unexpected option --' . array_key_first($options)); }
                 return CommandResult::success($formatter->overview($this->name, $this->registry->definitions()));
@@ -71,12 +80,15 @@ class Application
                 $next = fn () => $middleware($definition, $input, $console, $inner);
             }
             return $next();
-        } catch (InterruptedException $error) {
-            return CommandResult::failure($error->getMessage(), 128 + $error->signal);
-        } catch (InputException $error) {
-            return CommandResult::failure($error->getMessage(), 2);
         } catch (\Throwable $error) {
-            return CommandResult::failure($error->getMessage());
+            $event = new ExceptionEvent($error, $parsed?->commandName, $parsed?->actionName, $input);
+            foreach ($this->exceptionObservers as $observer) {
+                try { $observer($event); }
+                catch (\Throwable) { /* 诊断故障不影响其他观察器，也不替换原始异常。 */ }
+            }
+            $code = $error instanceof InterruptedException ? 128 + $error->signal
+                : ($error instanceof InputException ? 2 : 1);
+            return CommandResult::failure($error->getMessage(), $code);
         }
     }
 

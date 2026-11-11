@@ -26,7 +26,7 @@ final class InputParser
         $first = array_shift($words);
         if ($first !== null && $first[1]) { throw new InputException('command name must precede --'); }
         $commandName = $first[0] ?? null;
-        $command = $commandName === null ? null : ($registry->definitions()[$commandName] ?? null);
+        $command = $commandName === null ? null : $registry->definition($commandName);
         $actionName = null;
         $action = null;
         if ($command?->hasActions() && $words && !$words[0][1]) {
@@ -56,9 +56,10 @@ final class InputParser
         // 命名参数优先占位，其余位置参数按定义顺序填充尚未提供的字段。
         foreach ($definition->arguments() as $name => $argument) {
             if (!array_key_exists($name, $arguments)) {
-                $arguments[$name] = $positional ? array_shift($positional) : $argument->default;
+                if ($positional) { $arguments[$name] = array_shift($positional); }
             }
-            if ($argument->required && $arguments[$name] === null) { throw new InputException('argument ' . $name . ' is required'); }
+            $provided = array_key_exists($name, $arguments);
+            $arguments[$name] = $argument->bind($arguments[$name] ?? null, $provided);
         }
         if ($positional) { throw new InputException('unexpected argument: ' . $positional[0]); }
         return new Input($bound, $arguments, $options, $command, $action);

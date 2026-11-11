@@ -28,6 +28,10 @@ final class CommandRegistry
         $this->entries[$definition->name] = [clone $definition, \Closure::fromCallable($factory)];
     }
     public function addProvider(CommandProviderInterface $provider): void { $provider->register($this); }
+    /** 只复制目标命令，普通解析无需复制其他命令及其全部操作。 */
+    public function definition(string $name): ?CommandDefinition
+    { return isset($this->entries[$name]) ? clone $this->entries[$name][0] : null; }
+
     /** 返回快照供解析和帮助使用，读取定义不应创建业务对象。 */
     public function definitions(): array
     { return array_map(static fn ($entry) => clone $entry[0], $this->entries); }

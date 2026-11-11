@@ -11,6 +11,7 @@ use EasySwoole\Command\Definition\CommandDefinition;
 use EasySwoole\Command\Definition\Option;
 use EasySwoole\Command\Input\Input;
 use EasySwoole\Command\Result\CommandResult;
+use EasySwoole\Command\Validation\Rules;
 
 /** 定义、分发与各操作的实现分开，避免嵌套长链与过长的 match 分支。 */
 final class CacheCommand implements CommandInterface
@@ -23,22 +24,17 @@ final class CacheCommand implements CommandInterface
     {
         // required 检查是否提供参数，validate 进一步拒绝空字符串和纯空白。
         $store = Option::string('store', '缓存存储名称', required: true);
-        $store = $store->validate(static function (string $value): bool|string {
-            // 至少包含一个非空白字符，也拒绝全角空格等 Unicode 空白。
-            if (preg_match('/\S/u', $value) !== 1) {
-                return '--store 不能为空';
-            }
-
-            return true;
-        });
+        $store = $store->validate(Rules::notBlank('--store 不能为空'));
 
         $clear = ActionDefinition::create('clear');
         $clear->description('清理缓存');
         $clear->option($store);
+        $clear->example('php examples/cache.php cache clear --store=redis', '清理 Redis 缓存');
 
         $warmup = ActionDefinition::create('warmup');
         $warmup->description('预热缓存');
         $warmup->option($store);
+        $warmup->example('php examples/cache.php cache warmup --store=default', '预热默认缓存');
 
         $command = CommandDefinition::create('cache');
         $command->description('缓存管理');

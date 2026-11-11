@@ -16,3 +16,5 @@ require __DIR__ . '/Support/Assertions.php';
 require __DIR__ . '/Support/DemoCommand.php';
 require __DIR__ . '/Support/FakeTerminal.php';
 require __DIR__ . '/Support/Helpers.php';
+
+require __DIR__ . '/Support/CallbackCommand.php';
