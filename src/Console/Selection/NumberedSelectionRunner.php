@@ -15,14 +15,14 @@ final class NumberedSelectionRunner
     /** @param list<Choice> $choices 已由 Console 校验并连续编号的选项 */
     public function run(string $title, array $choices, bool $multiple): Selection
     {
-        $this->console->line($title);
+        $this->console->interactionLine($title);
         foreach ($choices as $index => $choice) {
-            $this->console->line('[' . ($index + 1) . '] ' . Text::clean($choice->label));
+            $this->console->interactionLine('[' . ($index + 1) . '] ' . Text::clean($choice->label));
             if ($choice->description !== '') {
-                $this->console->line('    ' . Text::clean($choice->description));
+                $this->console->interactionLine('    ' . Text::clean($choice->description));
             }
         }
-        $this->console->line('[0] Cancel');
+        $this->console->interactionLine('[0] Cancel');
 
         while (true) {
             $answer = $this->console->prompt($multiple ? 'Enter indexes (comma-separated) [0]: ' : 'Enter index [0]: ');
@@ -42,12 +42,13 @@ final class NumberedSelectionRunner
                     $selected = [];
                     break;
                 }
-                $selected[$number - 1] = $choices[$number - 1];
+                $selected[$number - 1] = true;
             }
             if ($selected && ($multiple || count($selected) === 1)) {
-                return Selection::selected(array_values($selected));
+                // 与方向键模式一致，按候选列表顺序返回已选项。
+                return Selection::selected(array_values(array_intersect_key($choices, $selected)));
             }
-            $this->console->line('Invalid selection; enter listed indexes or 0 to cancel.');
+            $this->console->interactionLine('Invalid selection; enter listed indexes or 0 to cancel.');
         }
     }
 }

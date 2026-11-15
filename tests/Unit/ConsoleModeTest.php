@@ -85,6 +85,25 @@ test('standard enum values and custom exit codes are returned as integers', func
     }
 });
 
+test('failed result writes return a failure in text and JSON modes', function () {
+    $output = fopen(__FILE__, 'rb');
+    $error = fopen('php://temp', 'w+');
+    try {
+        foreach ([false, true] as $json) {
+            $console = new Console(output: $output, error: $error, json: $json);
+            same(1, app()->run(['demo', 'run'], $console));
+        }
+        rewind($error);
+        same(str_repeat('cannot write console output' . PHP_EOL, 2), stream_get_contents($error));
+
+        $console = new Console(output: $output, error: $output, json: true);
+        same(1, app()->run(['demo', 'run'], $console));
+    } finally {
+        fclose($error);
+        fclose($output);
+    }
+});
+
 test('JSON disables interaction without entering a terminal session', function () {
     $terminal = new FakeTerminal();
     $console = new Console(output: fopen('php://temp', 'w+'), terminal: $terminal, json: true);

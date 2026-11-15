@@ -121,6 +121,10 @@ class Terminal
     }
     public function dimensions(): array
     {
+        if (PHP_OS_FAMILY === 'Windows' || !function_exists('proc_open')) {
+            return $this->lastSize;
+        }
+
         $now = $this->now();
         // 缓存短时间内的尺寸查询，避免高频键盘循环不断启动 stty 子进程。
         if ($now - $this->lastSizeAt < .2) { return $this->lastSize; }
@@ -133,7 +137,9 @@ class Terminal
     }
     protected function command(array $arguments): ?string
     {
-        $process = @proc_open(array_merge(['stty'], $arguments), [0 => $this->input, 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
+        // 表格可能从管道读入，尺寸应从显示它的终端查询。
+        $stream = $arguments === ['size'] && stream_isatty($this->output) ? $this->output : $this->input;
+        $process = @proc_open(array_merge(['stty'], $arguments), [0 => $stream, 1 => ['pipe', 'w'], 2 => ['pipe', 'w']], $pipes);
         if (!is_resource($process)) { return null; }
         $out = stream_get_contents($pipes[1]); stream_get_contents($pipes[2]);
         fclose($pipes[1]); fclose($pipes[2]);

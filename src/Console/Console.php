@@ -27,59 +27,113 @@ class Console
         private bool $allowInteraction = true, private bool $json = false,
     )
     {
-        $this->output = $output ?? STDOUT; $this->error = $error ?? STDERR;
-        $this->terminal = $terminal ?? new Terminal($input, $this->output);
+        $this->output = $output ?? STDOUT;
+        $this->error = $error ?? STDERR;
+        $this->terminal = $terminal ?? new Terminal($input, $this->textStream());
     }
     public function terminal(): Terminal { return $this->terminal; }
-    public function interactive(): bool { return $this->allowInteraction && !$this->json && $this->terminal->interactive(); }
+    public function interactive(): bool
+    {
+        return $this->allowInteraction && !$this->json && $this->terminal->interactive()
+            && (stream_isatty($this->output) || stream_isatty($this->error));
+    }
     /** 按实际输出流判断颜色能力，重定向、NO_COLOR 和简易终端统一使用纯文本。 */
     public function supportsColor(bool $error = false): bool
     {
-        return !$this->json && Text::supportsColor($error ? $this->error : $this->output);
+        return !$this->json && Text::supportsColor($this->textStream($error));
     }
     public function line(string $text = '', bool $error = false): void
     {
         // 活动视图独占屏幕；普通输出会破坏光标位置，因此要求回调返回待渲染内容。
         if ($this->active) { throw new \LogicException('return a view instead of writing during an interactive session'); }
-        $error = $error || $this->json;
-        $stream = $error ? $this->error : $this->output;
-        $text = Text::clean($text, $this->supportsColor($error), multiline: true);
-        fwrite($stream, $text . PHP_EOL);
+        $this->writeText($text, $error, newline: true);
     }
-    /** JSON 结果独占标准输出，普通 line/info/error 在该模式下都写入标准错误。 */
+
+    /** JSON 模式的普通文字走 stderr，完整 JSON 结果直接写入 stdout。 */
+    private function textStream(bool $error = false): mixed
+    {
+        return $error || $this->json ? $this->error : $this->output;
+    }
+
+    private function writeText(string $text, bool $error, bool $newline = false): void
+    {
+        $text = Text::clean($text, $this->supportsColor($error || $this->json), multiline: true);
+        $this->write($this->textStream($error), $newline ? $text . PHP_EOL : $text);
+    }
+
+    /** 检查写入字节数，避免管道断开或只写出部分内容时仍报告成功。 */
+    private function write(mixed $stream, string $text): void
+    {
+        if (@fwrite($stream, $text) !== strlen($text)) {
+            throw new TerminalException('cannot write console output');
+        }
+    }
+
     public function writeResult(CommandResult $result): void
     {
         if ($this->json) {
-            $data = [
-                'exitCode' => $result->exitCode,
-                'message' => $result->message === null ? null : Text::clean($result->message, false, multiline: true),
-                'data' => $result->data,
-            ];
-            try {
-                $payload = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
-            } catch (\JsonException $error) {
-                throw $error;
-            } catch (\Throwable $error) {
-                // jsonSerialize() 内抛出的异常会直接传出，统一按编码失败处理。
-                throw new \JsonException($error->getMessage(), 0, $error);
-            }
-            fwrite($this->output, $payload . PHP_EOL);
-        } elseif ($result->message !== null && $result->message !== '') {
+            $this->write($this->output, $this->encodeResult($result) . PHP_EOL);
+            return;
+        }
+
+        if ($result->message !== null && $result->message !== '') {
             $this->line($result->message, $result->exitCode !== ExitCode::SUCCESS->value);
+        }
+    }
+
+    private function encodeResult(CommandResult $result): string
+    {
+        $data = [
+            'exitCode' => $result->exitCode,
+            'message' => $result->message === null ? null : Text::clean($result->message, false, multiline: true),
+            'data' => $result->data,
+        ];
+        try {
+            return json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+        } catch (\JsonException $error) {
+            throw $error;
+        } catch (\Throwable $error) {
+            // jsonSerialize() 内抛出的异常会直接传出，统一按编码失败处理。
+            throw new \JsonException($error->getMessage(), 0, $error);
         }
     }
 
     public function info(string $text): void { $this->line($text); }
     public function error(string $text): void { $this->line($text, true); }
     public function table(array $headers, array $rows): void
-    { $this->line((new TableView($headers, $rows))->render()); }
+    {
+        $width = stream_isatty($this->textStream()) ? $this->terminal->dimensions()[1] : PHP_INT_MAX;
+        $this->line((new TableView($headers, $rows))->render($width));
+    }
+
+    /** 交互文字与提示使用同一个输出流，避免菜单随 stdout 一起重定向。 */
+    public function interactionLine(string $text): void
+    {
+        $this->line($text, $this->interactionUsesStderr());
+    }
+
+    private function interactionUsesStderr(): bool
+    {
+        return !stream_isatty($this->output) && stream_isatty($this->error);
+    }
+
     public function prompt(string $question): ?string
     {
         if ($this->active) { throw new \LogicException('an interactive view is already active'); }
-        if (!$this->interactive()) { throw new \RuntimeException('interactive input is unavailable or disabled; pass explicit parameters'); }
-        fwrite($this->output, Text::clean($question, $this->supportsColor(), multiline: true));
+        $this->requireInteraction('input');
+        $this->writeText($question, $this->interactionUsesStderr());
         return $this->terminal->readLine();
     }
+
+    private function requireInteraction(string $operation): void
+    {
+        if (!$this->interactive()) {
+            throw new \RuntimeException(
+                'interactive ' . $operation . ' requires a terminal input and visible output; enable interaction or pass explicit parameters',
+            );
+        }
+    }
+
     public function confirm(string $question, bool $default = false): bool
     {
         while (true) {
@@ -88,7 +142,7 @@ class Console
             $answer = strtolower(trim($answer));
             if ($answer === '') { return $default; }
             if (in_array($answer, ['y', 'yes', 'n', 'no'], true)) { return in_array($answer, ['y', 'yes'], true); }
-            $this->line('Please enter y or n.');
+            $this->interactionLine('Please enter y or n.');
         }
     }
     /** 会话成功打开后统一在 finally 中恢复终端；打开失败时不关闭其他会话持有的终端。 */
@@ -96,18 +150,25 @@ class Console
     {
         if ($this->active) { throw new \LogicException('an interactive view is already active'); }
         $this->active = true;
-        try { $this->terminal->open(); }
-        catch (TerminalException $error) {
+        try {
+            try {
+                $this->terminal->open();
+            } catch (TerminalException $error) {
+                // 只有打开失败时才能降级，编号菜单写入前先释放 Console 的独占状态。
+                if ($onUnavailable === null) {
+                    throw $error;
+                }
+                $this->active = false;
+                return $onUnavailable();
+            }
+
+            try {
+                return $callback();
+            } finally {
+                $this->terminal->close();
+            }
+        } finally {
             $this->active = false;
-            // 只有打开阶段的能力不足才允许降级；执行或清理期间的故障必须上抛。
-            if ($onUnavailable !== null) { return $onUnavailable(); }
-            throw $error;
-        }
-        catch (\Throwable $error) { $this->active = false; throw $error; }
-        try { return $callback(); }
-        finally {
-            try { $this->terminal->close(); }
-            finally { $this->active = false; }
         }
     }
     /** 刷新回调返回文本或 ViewInterface 视图；返回 false 结束视图。 */
@@ -132,7 +193,7 @@ class Console
         }
         if (!$choices) { return Selection::selected([]); }
         // 无交互输入时明确失败，不自动选择；有交互输入但无原始模式时降级为编号选择。
-        if (!$this->interactive()) { throw new \RuntimeException('interactive selection is unavailable or disabled; pass explicit parameters'); }
+        $this->requireInteraction('selection');
         $numbered = fn () => (new NumberedSelectionRunner($this))->run($title, $choices, $multiple);
         if (!$this->terminal->supported()) {
             return $numbered();

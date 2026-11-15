@@ -140,7 +140,7 @@ return CommandResult::failure('参数不合法', exitCode: ExitCode::INVALID_INP
 | 枚举 | 数值 | 含义 |
 | --- | --- | --- |
 | `ExitCode::SUCCESS` | `0` | 命令成功，或成功显示帮助 |
-| `ExitCode::FAILURE` | `1` | 一般执行失败、未指定退出码的 `CommandResult::failure()`，或 JSON 结果编码失败 |
+| `ExitCode::FAILURE` | `1` | 一般执行失败、未指定退出码的 `CommandResult::failure()`，或命令结果编码、写入失败 |
 | `ExitCode::INVALID_INPUT` | `2` | 未知命令或 Action，以及输入解析、类型转换或参数校验失败 |
 | `ExitCode::forSignal($signal)` | `128 + 信号编号` | 原始终端会话中捕获到的外部信号。例如 SIGTERM（15）对应 `143` |
 

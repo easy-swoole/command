@@ -24,6 +24,17 @@ test('watch optional value', function () {
     same(.25, app()->dispatch(['demo', 'run', '--watch=0.25'])->data[0]['watch']);
 });
 
+test('blank boolean values are rejected without changing implicit or explicit flags', function () {
+    $app = app();
+    foreach (['--force=', '--force=  '] as $token) {
+        $result = $app->dispatch(['demo', 'run', $token]);
+        same(2, $result->exitCode);
+        same('--force must be a boolean', $result->message);
+    }
+    same(true, $app->dispatch(['demo', 'run', '--force'])->data[0]['force']);
+    same(false, $app->dispatch(['demo', 'run', '--force=false'])->data[0]['force']);
+});
+
 test('last repeated option wins', fn () => same('test', app()->dispatch(['demo', 'run', '--mode=dev', '--mode=test'])->data[0]['mode']));
 
 test('options before command', fn () => same('prod', app()->dispatch(['--mode=prod', 'demo', 'run'])->data[0]['mode']));

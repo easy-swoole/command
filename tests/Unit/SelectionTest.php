@@ -48,8 +48,8 @@ test('raw mode failure restores mode', function () {
     same([['pid'=>2]], console($t)->select('Choose', choices())->values()); same(['saved'], end($t->modes));
 });
 
-test('numbered fallback retries and deduplicates', function () {
-    $t = new FakeTerminal(); $t->raw = false; $t->lines = ['bad', '9', '1,2,1'];
+test('numbered fallback retries, deduplicates and returns choices in list order', function () {
+    $t = new FakeTerminal(); $t->raw = false; $t->lines = ['bad', '9', '2,1,2'];
     same([['pid'=>1], ['pid'=>2]], console($t)->select('Choose', choices(), true)->values());
 });
 

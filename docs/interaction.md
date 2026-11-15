@@ -47,7 +47,7 @@ $console->table(['名称', '状态'], [
 return CommandResult::success();
 ```
 
-颜色可用于单元格。列宽按可见文字计算，支持中文，窄视口会截断内容以保留其他列。`NO_COLOR`、`TERM=dumb` 或输出重定向时移除颜色；内容中的清屏、移动光标等控制序列不会被执行。
+颜色可用于单元格。列宽按可见文字计算，支持中文。表格直出终端时按可查询的终端宽度排版，窄视口会截断内容以保留其他列。输出到管道或文件时保留完整字段。`NO_COLOR`、`TERM=dumb` 或输出重定向时移除颜色；内容中的清屏、移动光标等控制序列不会被执行。
 
 ## 提问和确认
 
@@ -70,7 +70,7 @@ if (!$console->confirm('确认继续？', default: false)) {
 return CommandResult::success('已确认');
 ```
 
-空输入使用 default，输入流关闭返回 false。不合法的回答会继续询问。没有可用交互终端或显式禁止交互时会报告错误，不会因为设置 default: true 就自动确认。
+空输入使用 default，输入流关闭返回 false。不合法的回答会继续询问。没有可用交互终端或显式禁止交互时会报告错误，不会因为设置 default: true 就自动确认。stdout 被重定向且 stderr 仍是终端时，提问、编号菜单及重试提示会显示在 stderr，结果仍写入原有的输出流。如果 stdout 和 stderr 都不是终端，交互调用会直接报告错误，请通过参数指定操作。
 
 ## 单选、多选和搜索
 
@@ -104,7 +104,7 @@ Choice 的四个构造参数依次是：稳定 ID、展示名称、原始业务�
 $result = $console->select('选择环境', $choices, multiple: true);
 ```
 
-values() 返回已选业务值的列表，单选也返回列表。choices 属性返回已选 Choice 对象，可以读取其 id 或 label。
+values() 返回已选业务值的列表，单选也返回列表。方向键和编号模式都按候选列表的顺序返回已选项。choices 属性返回已选 Choice 对象，可以读取其 id 或 label。
 
 如果业务要区分用户取消与输入流关闭，检查 state：
 
@@ -215,7 +215,7 @@ stdout 中是一份 JSON：
 php console.php greet --name=张三 > result.json 2> progress.log
 ```
 
-JSON 模式不输出颜色，并禁止交互。data 应能直接 JSON 编码；编码失败时 stdout 不写部分 JSON，错误写 stderr，退出码为 1。不通过 Console 的直接 echo 不受流分离控制。
+JSON 模式不输出颜色，并禁止交互。data 应能直接 JSON 编码；编码失败时 stdout 不写部分 JSON，错误写 stderr，退出码为 1。文本或 JSON 结果写入失败时也返回 1。不通过 Console 的直接 echo 不受流分离控制。
 
 json 也是 PHP 配置，不是组件预留的命令行参数；是否向用户提供 `--json`，由宿主决定。
 

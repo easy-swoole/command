@@ -15,7 +15,8 @@ ROOT = Path(__file__).resolve().parents[1]
 PHP = os.environ.get('PHP_BINARY', 'php')
 
 
-def start(live=False, code=None, dimensions=None, environment=None):
+def start(live=False, code=None, dimensions=None, environment=None,
+          redirect_stdout=False, redirect_stdin=False, redirect_stderr=False):
     master, slave = pty.openpty()
     if dimensions:
         fcntl.ioctl(slave, termios.TIOCSWINSZ, struct.pack('HHHH', *dimensions, 0, 0))
@@ -26,7 +27,9 @@ def start(live=False, code=None, dimensions=None, environment=None):
                [PHP, str(ROOT / 'examples/console.php'), 'demo', 'console'] + (['--live'] if live else []))
     process = subprocess.Popen(
         command,
-        stdin=slave, stdout=slave, stderr=slave,
+        stdin=subprocess.DEVNULL if redirect_stdin else slave,
+        stdout=subprocess.PIPE if redirect_stdout else slave,
+        stderr=subprocess.PIPE if redirect_stderr else slave,
         env=settings,
     )
     return process, master, slave, mode, bytearray()
@@ -243,3 +246,71 @@ output = finish(session, raw=False)
 assert b'must not prompt' not in output, output
 assert b'\x1b[?1049h' not in output, output
 print('PASS explicit no interaction policy on a real TTY')
+
+
+# stdout 被重定向时，编号菜单、提问和重试消息都应显示在终端。
+session = start(code=r"""
+require $argv[1];
+$console = new EasySwoole\Command\Console\Console();
+$choice = $console->select('Choose a target', [
+    new EasySwoole\Command\Console\Selection\Choice('a', 'Primary', 'primary'),
+    new EasySwoole\Command\Console\Selection\Choice('b', 'Backup', 'backup'),
+], multiple: true);
+if ($console->confirm('Confirm selection?')) {
+    $console->line('Selected: ' . implode(',', $choice->values()));
+}
+$console->table(['Target', 'Status'], [[str_repeat('x', 100) . '/final.log', 'ready']]);
+""", redirect_stdout=True)
+until(session, b'Enter indexes')
+os.write(session[1], b'wrong\n')
+until(session, b'Invalid selection')
+os.write(session[1], b'2,1,2\n')
+until(session, b'Confirm selection?')
+os.write(session[1], b'maybe\n')
+until(session, b'Please enter y or n.')
+os.write(session[1], b'yes\n')
+output = finish(session, raw=False)
+assert b'Choose a target' in output and b'[2] Backup' in output, output
+assert b'Selected:' not in output, output
+with session[0].stdout as stdout:
+    result = stdout.read()
+assert result.startswith(b'Selected: primary,backup\n'), result
+assert b'x' * 100 + b'/final.log' in result, result
+assert b'Choose a target' not in result and b'Confirm selection?' not in result, result
+print('PASS redirected stdout keeps interaction on stderr and preserves full table cells')
+
+# stdin 非终端时，也应通过输出终端获取表格宽度。
+session = start(code=r"""
+require $argv[1];
+$console = new EasySwoole\Command\Console\Console();
+$console->table(['Target', 'Status'], [[str_repeat('x', 100) . '/final.log', 'ready']]);
+""", dimensions=(20, 120), redirect_stdin=True)
+output = finish(session, raw=False)
+assert b'x' * 100 + b'/final.log  ready' in output, output
+print('PASS table honors output terminal width with redirected stdin')
+
+
+# 输入仍是终端、两个输出流都被重定向时，交互应立即失败。
+session = start(code=r"""
+require $argv[1];
+$console = new EasySwoole\Command\Console\Console();
+foreach ([
+    fn () => $console->prompt('Hidden prompt'),
+    fn () => $console->confirm('Hidden confirmation'),
+    fn () => $console->select('Hidden menu', [
+        new EasySwoole\Command\Console\Selection\Choice('a', 'Primary', 'primary'),
+    ]),
+] as $interaction) {
+    try {
+        $interaction();
+        exit(1);
+    } catch (RuntimeException $error) {
+        $console->error($error->getMessage());
+    }
+}
+""", redirect_stdout=True, redirect_stderr=True)
+finish(session, raw=False)
+with session[0].stdout as stdout, session[0].stderr as stderr:
+    assert stdout.read() == b''
+    assert stderr.read().count(b'pass explicit parameters') == 3
+print('PASS interactive calls reject hidden prompts when both output streams are redirected')

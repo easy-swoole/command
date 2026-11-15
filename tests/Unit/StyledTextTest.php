@@ -93,7 +93,7 @@ test('prompt uses the same color and control sequence policy as ordinary output'
     $out = fopen('php://temp', 'w+');
     try {
         $terminal = new FakeTerminal(); $terminal->lines = ['answer'];
-        $console = new Console(output: $out, terminal: $terminal);
+        $console = console($terminal, output: $out);
         same('answer', $console->prompt(Color::green('Question: ') . "\033[2J"));
         rewind($out); same('Question: ', stream_get_contents($out));
     } finally { fclose($out); }

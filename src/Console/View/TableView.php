@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace EasySwoole\Command\Console\View;
 
-use EasySwoole\Command\Console\Terminal;
 use EasySwoole\Command\Console\Text;
 
 final class TableView implements ViewInterface
@@ -25,9 +24,9 @@ final class TableView implements ViewInterface
         foreach ($visible as $row) {
             $cells = [];
             foreach (array_values($row) as $column => $value) {
-                $cell = Terminal::clean((string)$value);
+                $cell = Text::clean((string)$value);
                 $cells[] = $cell;
-                $desired[$column] = max($desired[$column] ?? 1, Terminal::width($cell));
+                $desired[$column] = max($desired[$column] ?? 1, Text::width($cell));
             }
             $rows[] = $cells;
         }
@@ -41,8 +40,8 @@ final class TableView implements ViewInterface
             $cells = [];
             foreach ($widths as $column => $size) {
                 if ($size === 0) { continue; }
-                $value = Terminal::fit($row[$column] ?? '', $size);
-                $cells[] = $value . str_repeat(' ', max(0, $size - Terminal::width($value)));
+                $value = Text::fit($row[$column] ?? '', $size);
+                $cells[] = $value . str_repeat(' ', max(0, $size - Text::width($value)));
             }
             $lines[] = Text::trimEnd(implode(str_repeat(' ', $gap), $cells));
         }

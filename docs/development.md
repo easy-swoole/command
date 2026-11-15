@@ -26,7 +26,7 @@ Application 负责分发顺序和异常边界。InputParser 解析词元、定�
 
 Option、Argument 及 ValidationChain 通过新对象追加规则；CommandDefinition、ActionDefinition 是构建器。注册及读取时复制定义，Action 和校验链不会因外部继续修改而污染注册快照。
 
-SelectionState 处理状态转换，SelectionRenderer 负责布局，SelectionRunner 同步可见页大小并处理终端按键。原始终端模式不可用时，由 NumberedSelectionRunner 通过 Console 读写编号菜单。Console 负责交互策略、模式选择和会话管理。实时视图同样把状态与事件循环分开。
+SelectionState 处理状态转换，SelectionRenderer 负责布局，SelectionRunner 同步可见页大小并处理终端按键。原始终端模式不可用时，由 NumberedSelectionRunner 通过 Console 读写编号菜单。Console 负责交互策略、模式选择和会话管理。普通文字和交互提示共用文本清理与写入检查，JSON 结果单独完成编码后写入 stdout。Terminal 负责读取按键、查询尺寸和恢复终端模式。表格使用 Text 测量、清理与截断单元格。实时视图同样把状态与事件循环分开。
 
 ## 在测试中替换输入输出
 

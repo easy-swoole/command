@@ -7,8 +7,15 @@ use EasySwoole\Command\Console\Console;
 use EasySwoole\Command\Console\Terminal;
 use EasySwoole\Command\Console\Selection\Choice;
 
-function console(?FakeTerminal $terminal = null): Console {
-    return new Console(output: fopen('php://temp', 'w+'), error: fopen('php://temp', 'w+'), terminal: $terminal ?? new FakeTerminal());
+function console(?FakeTerminal $terminal = null, mixed $output = null): Console
+{
+    return new class(output: $output ?? fopen('php://temp', 'w+'), error: fopen('php://temp', 'w+'), terminal: $terminal ?? new FakeTerminal()) extends Console {
+        public function interactive(): bool
+        {
+            // 模拟终端通过内存流记录输出，交互能力由 FakeTerminal 提供。
+            return $this->terminal()->interactive();
+        }
+    };
 }
 
 function app(): Application { $app = new Application(); $app->addCommand(new DemoCommand()); return $app; }

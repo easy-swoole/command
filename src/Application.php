@@ -11,6 +11,7 @@ use EasySwoole\Command\Definition\CommandDefinition;
 use EasySwoole\Command\Event\ExceptionEvent;
 use EasySwoole\Command\Exception\InputException;
 use EasySwoole\Command\Exception\InterruptedException;
+use EasySwoole\Command\Exception\TerminalException;
 use EasySwoole\Command\Help\HelpFormatter;
 use EasySwoole\Command\Input\Input;
 use EasySwoole\Command\Input\InputBinder;
@@ -153,9 +154,17 @@ class Application
     {
         $console ??= new Console();
         $result = $this->dispatch($argv, $console);
-        try { $console->writeResult($result); }
-        catch (\JsonException $error) {
-            $console->error('cannot encode command result: ' . $error->getMessage());
+        try {
+            $console->writeResult($result);
+        } catch (\JsonException | TerminalException $error) {
+            $message = $error instanceof \JsonException
+                ? 'cannot encode command result: ' . $error->getMessage()
+                : $error->getMessage();
+            try {
+                $console->error($message);
+            } catch (TerminalException) {
+                // stderr 也无法写入时，仍用退出码报告失败。
+            }
             return ExitCode::FAILURE->value;
         }
         return $result->exitCode;

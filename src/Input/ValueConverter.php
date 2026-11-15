@@ -14,8 +14,7 @@ final class ValueConverter
         return match ($type) {
             'string' => is_scalar($value) || $value instanceof \Stringable
                 ? (string)$value : throw new InputException($label . ' must be a string'),
-            'bool' => filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE)
-                ?? throw new InputException($label . ' must be a boolean'),
+            'bool' => self::boolean($value, $label),
             'int' => self::integer($value, $label),
             'float' => is_numeric($value) && is_finite((float)$value)
                 ? (float)$value : throw new InputException($label . ' must be a finite number'),
@@ -31,6 +30,15 @@ final class ValueConverter
         catch (InputException $error) {
             throw new \InvalidArgumentException('invalid default for ' . $label . ': ' . $error->getMessage(), 0, $error);
         }
+    }
+
+    private static function boolean(mixed $value, string $label): bool
+    {
+        // PHP 的布尔过滤器会把空字符串转为 false，显式空值在 CLI 中属于输入错误。
+        $converted = is_string($value) && trim($value) === ''
+            ? null
+            : filter_var($value, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+        return $converted ?? throw new InputException($label . ' must be a boolean');
     }
 
     private static function integer(mixed $value, string $label): int
