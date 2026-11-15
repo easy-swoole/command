@@ -27,7 +27,23 @@ final class CommandRegistry
         if (!isset($this->entries[$definition->name])) { throw new \LogicException('cannot replace unknown command: ' . $definition->name); }
         $this->entries[$definition->name] = [clone $definition, \Closure::fromCallable($factory)];
     }
-    public function addProvider(CommandProviderInterface $provider): void { $provider->register($this); }
+    /** Provider 注册失败时，恢复本次调用前的命令定义和工厂。 */
+    public function addProvider(CommandProviderInterface $provider): void
+    {
+        $previousEntries = $this->entries;
+        try {
+            $provider->register($this);
+        } catch (\Throwable $error) {
+            $this->entries = $previousEntries;
+            throw $error;
+        }
+    }
+    /** 返回已注册的命令名，供拼写建议读取，无需复制定义。 */
+    public function names(): array
+    {
+        return array_keys($this->entries);
+    }
+
     /** 只复制目标命令，普通解析无需复制其他命令及其全部操作。 */
     public function definition(string $name): ?CommandDefinition
     { return isset($this->entries[$name]) ? clone $this->entries[$name][0] : null; }

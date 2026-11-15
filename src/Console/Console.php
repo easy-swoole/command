@@ -7,11 +7,13 @@ namespace EasySwoole\Command\Console;
 use EasySwoole\Command\Console\Live\LiveRunner;
 use EasySwoole\Command\Console\Live\LiveState;
 use EasySwoole\Command\Console\Selection\Choice;
+use EasySwoole\Command\Console\Selection\NumberedSelectionRunner;
 use EasySwoole\Command\Console\Selection\Selection;
 use EasySwoole\Command\Console\Selection\SelectionRunner;
 use EasySwoole\Command\Console\View\TableView;
 use EasySwoole\Command\Exception\TerminalException;
 use EasySwoole\Command\Result\CommandResult;
+use EasySwoole\Command\Result\ExitCode;
 
 /** 面向命令的统一交互入口，集中协调输出、选择和实时视图对终端的占用。 */
 class Console
@@ -48,14 +50,22 @@ class Console
     public function writeResult(CommandResult $result): void
     {
         if ($this->json) {
-            $payload = json_encode([
+            $data = [
                 'exitCode' => $result->exitCode,
                 'message' => $result->message === null ? null : Text::clean($result->message, false, multiline: true),
                 'data' => $result->data,
-            ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+            ];
+            try {
+                $payload = json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+            } catch (\JsonException $error) {
+                throw $error;
+            } catch (\Throwable $error) {
+                // jsonSerialize() 内抛出的异常会直接传出，统一按编码失败处理。
+                throw new \JsonException($error->getMessage(), 0, $error);
+            }
             fwrite($this->output, $payload . PHP_EOL);
         } elseif ($result->message !== null && $result->message !== '') {
-            $this->line($result->message, $result->exitCode !== 0);
+            $this->line($result->message, $result->exitCode !== ExitCode::SUCCESS->value);
         }
     }
 
@@ -123,33 +133,13 @@ class Console
         if (!$choices) { return Selection::selected([]); }
         // 无交互输入时明确失败，不自动选择；有交互输入但无原始模式时降级为编号选择。
         if (!$this->interactive()) { throw new \RuntimeException('interactive selection is unavailable or disabled; pass explicit parameters'); }
-        if (!$this->terminal->supported()) { return $this->numberedSelect($title, $choices, $multiple); }
+        $numbered = fn () => (new NumberedSelectionRunner($this))->run($title, $choices, $multiple);
+        if (!$this->terminal->supported()) {
+            return $numbered();
+        }
         return $this->session(
             fn () => (new SelectionRunner($this->terminal))->run($title, $choices, $multiple),
-            fn () => $this->numberedSelect($title, $choices, $multiple),
+            $numbered,
         );
-    }
-
-    private function numberedSelect(string $title, array $choices, bool $multiple): Selection
-    {
-        $this->line($title);
-        foreach ($choices as $index => $choice) {
-            $this->line('[' . ($index + 1) . '] ' . Terminal::clean($choice->label));
-            if ($choice->description !== '') { $this->line('    ' . Terminal::clean($choice->description)); }
-        }
-        $this->line('[0] Cancel');
-        while (true) {
-            $answer = $this->prompt($multiple ? 'Enter indexes (comma-separated) [0]: ' : 'Enter index [0]: ');
-            if ($answer === null) { return Selection::eof(); }
-            $answer = trim($answer);
-            if ($answer === '' || $answer === '0' || strtolower($answer) === 'q') { return Selection::cancel(); }
-            $selected = [];
-            foreach (preg_split('/[\s,，]+/u', $answer) as $index) {
-                if (!ctype_digit($index) || (int)$index < 1 || (int)$index > count($choices)) { $selected = []; break; }
-                $selected[(int)$index - 1] = $choices[(int)$index - 1];
-            }
-            if ($selected && ($multiple || count($selected) === 1)) { return Selection::selected(array_values($selected)); }
-            $this->line('Invalid selection; enter listed indexes or 0 to cancel.');
-        }
     }
 }

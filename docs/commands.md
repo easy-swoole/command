@@ -74,6 +74,15 @@ return match ($input->action()) {
 
 **有 Action 的命令，参数和整组校验都放到 Action 上；独立命令才直接放到 CommandDefinition 上。** 两种模式不能混用。
 
+输入未知命令或 Action 时，组件会提示相近的已注册名称。Action 建议只来自当前命令。比如输错 `clear` 时：
+
+```sh
+php examples/cache.php cache celar
+# unknown action: celar on cache. Did you mean cache clear?
+```
+
+退出码仍为 2，用户需要按正确名称重新执行。没有相近名称时只显示原错误。
+
 ## 帮助自动生成
 
 不需要单独实现 help 命令。组件从注册的定义读取名称、描述、参数类型及默认值：
@@ -96,7 +105,7 @@ $clear->example(
 );
 ```
 
-详细帮助会显示 Usage、类型、实际必填标记、默认值、隐式值和示例。分组列表保持简洁。帮助请求不创建延迟业务实例，也不执行输入校验或中间件。
+详细帮助会显示 Usage、类型、实际必填标记、默认值、隐式值和示例。分组列表保持简洁。各层级的帮助请求都会检查选项名，未知选项会返回退出码 2。根级和命令分组帮助只接受内置的 `--help`，独立命令和 Action 的帮助可接受各自声明的选项。以 `help` 开头的入口遵循同样的规则。帮助请求会跳过必填项、类型转换和值校验，也不会创建延迟业务实例或执行中间件。
 
 终端中的命令及 Action 名称为红色，标题为绿色，参数名称为黄色。重定向输出、设置 `NO_COLOR` 或 `TERM=dumb` 时使用纯文本。
 
@@ -118,20 +127,28 @@ return CommandResult::success('已处理', data: ['count' => 3]);
 return CommandResult::failure('目标不存在');
 ```
 
+要显式指定「输入错误」，先在命令文件顶部引入 `EasySwoole\Command\Result\ExitCode`，再在业务方法中返回结果。
+
 ```php
-return CommandResult::failure('参数不合法', exitCode: 2);
+return CommandResult::failure('参数不合法', exitCode: ExitCode::INVALID_INPUT);
 ```
 
 `message` 用于展示，`data` 保存结构化业务结果。普通文本模式只自动输出 message；程序调用或 JSON 模式可以读取 data。
 
-| 退出码 | 含义 |
-| --- | --- |
-| `0` | 成功 |
-| `1` | 执行异常，或默认的失败结果 |
-| `2` | 输入解析、类型转换或参数校验失败 |
-| `128 + 信号编号` | 原始终端会话中捕获到的外部信号，例如 SIGTERM 对应 143 |
+标准退出码定义在 `EasySwoole\Command\Result\ExitCode` 整数枚举中。
 
-业务也可以通过 `exitCode` 返回自己的退出码。实时视图中的键盘 q、Esc、Ctrl+C 表示正常退出视图，与外部信号中断不同。
+| 枚举 | 数值 | 含义 |
+| --- | --- | --- |
+| `ExitCode::SUCCESS` | `0` | 命令成功，或成功显示帮助 |
+| `ExitCode::FAILURE` | `1` | 一般执行失败、未指定退出码的 `CommandResult::failure()`，或 JSON 结果编码失败 |
+| `ExitCode::INVALID_INPUT` | `2` | 未知命令或 Action，以及输入解析、类型转换或参数校验失败 |
+| `ExitCode::forSignal($signal)` | `128 + 信号编号` | 原始终端会话中捕获到的外部信号。例如 SIGTERM（15）对应 `143` |
+
+`CommandResult` 的构造函数和 `failure()` 接受枚举值或整数。例如业务可以用 `CommandResult::failure('目标暂不可用', exitCode: 10)` 返回自定义退出码。
+
+`$result->exitCode`、`run()` 的返回值和 JSON 中的 `exitCode` 都是整数。PHP 代码可用 `ExitCode::SUCCESS->value` 比较，Shell 脚本可用 `$?` 读取命令的退出码。
+
+实时视图中的 q、Esc、Ctrl+C 用于退出视图，最终退出码由命令返回的结果决定。
 
 ## 在 PHP 中调用命令
 
@@ -140,9 +157,11 @@ return CommandResult::failure('参数不合法', exitCode: 2);
 下面代码放在 README 的 `console.php` 中、注册命令之后，替换原来的 `exit(...)`：
 
 ```php
+use EasySwoole\Command\Result\ExitCode;
+
 $result = $app->dispatch(['greet', '--name=张三']);
 
-if ($result->exitCode === 0) {
+if ($result->exitCode === ExitCode::SUCCESS->value) {
     echo $result->message; // 你好，张三！
 }
 ```

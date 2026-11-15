@@ -22,11 +22,11 @@
 | `src/Console/Live/` | 实时刷新状态和事件循环 |
 | `src/Console/View/` | 视图接口及表格 |
 
-应用流程：InputParser 定位命令和 Action，InputBinder 绑定并校验输入，随后进入中间件和业务命令。帮助在绑定之前返回；参数错误在执行工厂之前返回。
+Application 负责分发顺序和异常边界。InputParser 解析词元、定位命令和 Action，并给未知目标提供拼写建议。帮助请求在绑定前检查选项名，然后交给 HelpFormatter 渲染。执行请求由 InputBinder 分别绑定选项和位置参数，再执行整组校验。通过校验后才进入中间件和业务工厂。
 
 Option、Argument 及 ValidationChain 通过新对象追加规则；CommandDefinition、ActionDefinition 是构建器。注册及读取时复制定义，Action 和校验链不会因外部继续修改而污染注册快照。
 
-SelectionState 处理状态转换，SelectionRenderer 只负责布局，SelectionRunner 显式同步可见页大小并处理终端事件。空闲时不反复生成视图。实时视图同样把状态与事件循环分开。
+SelectionState 处理状态转换，SelectionRenderer 负责布局，SelectionRunner 同步可见页大小并处理终端按键。原始终端模式不可用时，由 NumberedSelectionRunner 通过 Console 读写编号菜单。Console 负责交互策略、模式选择和会话管理。实时视图同样把状态与事件循环分开。
 
 ## 在测试中替换输入输出
 

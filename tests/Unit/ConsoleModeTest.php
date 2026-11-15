@@ -8,6 +8,7 @@ use EasySwoole\Command\Console\Console;
 use EasySwoole\Command\Definition\CommandDefinition;
 use EasySwoole\Command\Input\Input;
 use EasySwoole\Command\Result\CommandResult;
+use EasySwoole\Command\Result\ExitCode;
 
 test('explicit interaction policy blocks every interactive entry even with a TTY', function () {
     $terminal = new FakeTerminal(); $terminal->lines = ['yes'];
@@ -59,6 +60,31 @@ test('JSON includes input failures execution failures and help with correct exit
     } finally { fclose($out); fclose($err); }
 });
 
+test('standard enum values and custom exit codes are returned as integers', function () {
+    $out = fopen('php://temp', 'w+');
+    try {
+        $app = new Application();
+        $app->addCommand(new CallbackCommand(
+            CommandDefinition::create('invalid'),
+            static fn () => CommandResult::failure('invalid input', exitCode: ExitCode::INVALID_INPUT),
+        ));
+        $app->addCommand(new CallbackCommand(
+            CommandDefinition::create('unavailable'),
+            static fn () => new CommandResult(exitCode: 10),
+        ));
+
+        $console = new Console(output: $out, json: true);
+        same(2, $app->run(['invalid'], $console));
+        same(10, $app->run(['unavailable'], $console));
+
+        rewind($out);
+        same(2, json_decode(fgets($out), true, flags: JSON_THROW_ON_ERROR)['exitCode']);
+        same(10, json_decode(fgets($out), true, flags: JSON_THROW_ON_ERROR)['exitCode']);
+    } finally {
+        fclose($out);
+    }
+});
+
 test('JSON disables interaction without entering a terminal session', function () {
     $terminal = new FakeTerminal();
     $console = new Console(output: fopen('php://temp', 'w+'), terminal: $terminal, json: true);
@@ -78,4 +104,42 @@ test('JSON encoding failure reports an error without writing partial JSON', func
         rewind($out); same('', stream_get_contents($out));
         rewind($err); same(true, str_contains(stream_get_contents($err), 'cannot encode command result:'));
     } finally { fclose($out); fclose($err); fclose($resource); }
+});
+
+test('exceptions from custom JSON serialization follow the encoding failure path', function () {
+    $out = fopen('php://temp', 'w+');
+    $err = fopen('php://temp', 'w+');
+    try {
+        $original = new RuntimeException('custom serialization failed');
+        $data = new class($original) implements JsonSerializable {
+            public function __construct(private RuntimeException $error) {}
+
+            public function jsonSerialize(): mixed
+            {
+                throw $this->error;
+            }
+        };
+
+        $result = CommandResult::success(data: $data);
+        $console = new Console(output: $out, error: $err, json: true);
+        $app = new Application();
+        $app->addCommand(new CallbackCommand(CommandDefinition::create('run'), static fn () => $result));
+
+        same(1, $app->run(['run'], $console));
+        rewind($out);
+        same('', stream_get_contents($out));
+        rewind($err);
+        same('cannot encode command result: custom serialization failed' . PHP_EOL, stream_get_contents($err));
+
+        $cause = null;
+        try {
+            $console->writeResult($result);
+        } catch (JsonException $error) {
+            $cause = $error->getPrevious();
+        }
+        same($original, $cause);
+    } finally {
+        fclose($out);
+        fclose($err);
+    }
 });

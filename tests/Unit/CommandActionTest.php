@@ -90,6 +90,32 @@ test('action help bypasses required input and excludes sibling actions', functio
     same([], $cache->calls);
 });
 
+test('help rejects unknown options at each level without validating known option values', function () {
+    [$app, $cache] = cacheApplication();
+    foreach ([
+        [['--help', '--typo'], 'typo'],
+        [['install', '--help', '--typo'], 'typo'],
+        [['cache', '--help', '--store=redis'], 'store'],
+        [['cache', 'warmup', '--help', '--store=redis'], 'store'],
+        [['help', 'cache', 'warmup', '--typo'], 'typo'],
+    ] as [$argv, $unknown]) {
+        $result = $app->dispatch($argv);
+        same(2, $result->exitCode);
+        same('unknown option --' . $unknown, $result->message);
+    }
+
+    foreach ([
+        ['--help'],
+        ['cache', '--help'],
+        ['cache', 'warmup', '--help'],
+        ['cache', 'warmup', '--help', '--count'],
+        ['help', 'cache', 'warmup', '--count=not-an-int'],
+    ] as $argv) {
+        same(0, $app->dispatch($argv)->exitCode);
+    }
+    same([], $cache->calls);
+});
+
 test('standalone command executes without a synthetic default action', function () {
     [$app] = cacheApplication();
     same(['install', null, 'default'], $app->dispatch(['install'])->data);
@@ -102,6 +128,26 @@ test('action options and case sensitive names cannot leak to siblings', function
     foreach ([['cache', 'clear', '--count=3'], ['cache', 'warmup', '--store=redis'],
         ['cache', 'warmup'], ['cache', 'Clear'], ['cache', 'missing', '--help'], ['cache', '--', 'clear']] as $argv) {
         same(2, $app->dispatch($argv)->exitCode);
+    }
+    same([], $cache->calls);
+});
+
+test('misspelled names suggest nearby registered commands or actions without executing them', function () {
+    [$app, $cache] = cacheApplication();
+    $app->registry()->register(CommandDefinition::create('celar'), static function () {
+        throw new LogicException('suggestions must not load the command');
+    });
+
+    foreach ([
+        [['cahce'], 'unknown command: cahce. Did you mean cache?'],
+        [['cache', 'celar'], 'unknown action: celar on cache. Did you mean cache clear?'],
+        [['cache', 'Clear', '--help'], 'unknown action: Clear on cache. Did you mean cache clear?'],
+        [['cache', 'install'], 'unknown action: install on cache'],
+        [['completely-different'], 'unknown command: completely-different'],
+    ] as [$argv, $message]) {
+        $result = $app->dispatch($argv);
+        same(2, $result->exitCode);
+        same($message, $result->message);
     }
     same([], $cache->calls);
 });

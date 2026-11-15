@@ -52,6 +52,8 @@ php console.php greet --name=张三
 
 Provider 可以多次调用 registry 的 add 或 register 注册不同名称。现成的 Provider 示例见 [DemoProvider](../examples/Console/DemoProvider.php)。
 
+如果 Provider 注册过程中抛出异常，注册表会撤销该次调用新增或替换的命令，恢复原有定义和工厂，并将原始异常抛给调用方。修正重名等问题后，可以重新注册。
+
 ## 延迟创建命令
 
 如果创建命令会连接服务、读取配置，或者构造业务依赖比较昂贵，先注册定义与工厂，在真正执行时再创建实例。
