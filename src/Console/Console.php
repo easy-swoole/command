@@ -64,7 +64,13 @@ class Console
     /** 检查写入字节数，避免管道断开或只写出部分内容时仍报告成功。 */
     private function write(mixed $stream, string $text): void
     {
-        if (@fwrite($stream, $text) !== strlen($text)) {
+        try {
+            $written = @fwrite($stream, $text);
+        } catch (\ErrorException $error) {
+            // 宿主可能把 fwrite 的警告转换为异常，仍交给统一的写入失败处理。
+            throw new TerminalException('cannot write console output', 0, $error);
+        }
+        if ($written !== strlen($text)) {
             throw new TerminalException('cannot write console output');
         }
     }
@@ -83,9 +89,14 @@ class Console
 
     private function encodeResult(CommandResult $result): string
     {
+        $message = $result->message;
+        if ($message !== null) {
+            // 诊断可能包含原始命令行字节，修复展示文本以保留原错误码。
+            $message = mb_scrub(Text::clean($message, false, multiline: true), 'UTF-8');
+        }
         $data = [
             'exitCode' => $result->exitCode,
-            'message' => $result->message === null ? null : Text::clean($result->message, false, multiline: true),
+            'message' => $message,
             'data' => $result->data,
         ];
         try {

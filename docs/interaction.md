@@ -215,7 +215,7 @@ stdout 中是一份 JSON：
 php console.php greet --name=张三 > result.json 2> progress.log
 ```
 
-JSON 模式不输出颜色，并禁止交互。data 应能直接 JSON 编码；编码失败时 stdout 不写部分 JSON，错误写 stderr，退出码为 1。文本或 JSON 结果写入失败时也返回 1。不通过 Console 的直接 echo 不受流分离控制。
+JSON 模式不输出颜色，并禁止交互。组件会替换 `message` 中的无效 UTF-8 字节，让诊断消息保留原始退出码。调用者应提供可直接 JSON 编码的 `data`。编码失败时 stdout 不写部分 JSON，错误写 stderr，退出码为 1。文本或 JSON 结果写入失败时也返回 1。不通过 Console 的直接 echo 不受流分离控制。
 
 json 也是 PHP 配置，不是组件预留的命令行参数；是否向用户提供 `--json`，由宿主决定。
 

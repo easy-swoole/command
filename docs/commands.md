@@ -144,7 +144,7 @@ return CommandResult::failure('参数不合法', exitCode: ExitCode::INVALID_INP
 | `ExitCode::INVALID_INPUT` | `2` | 未知命令或 Action，以及输入解析、类型转换或参数校验失败 |
 | `ExitCode::forSignal($signal)` | `128 + 信号编号` | 原始终端会话中捕获到的外部信号。例如 SIGTERM（15）对应 `143` |
 
-`CommandResult` 的构造函数和 `failure()` 接受枚举值或整数。例如业务可以用 `CommandResult::failure('目标暂不可用', exitCode: 10)` 返回自定义退出码。
+`CommandResult` 的构造函数和 `failure()` 接受枚举值或整数。例如业务可以用 `CommandResult::failure('目标暂不可用', exitCode: 10)` 返回自定义退出码。通过 Shell 启动时，调用者应使用 0 到 255 之间的整数。Shell 可能截断越界值，例如 256 会被读成成功码 0。
 
 `$result->exitCode`、`run()` 的返回值和 JSON 中的 `exitCode` 都是整数。PHP 代码可用 `ExitCode::SUCCESS->value` 比较，Shell 脚本可用 `$?` 读取命令的退出码。
 

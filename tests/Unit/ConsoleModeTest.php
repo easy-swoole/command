@@ -60,6 +60,26 @@ test('JSON includes input failures execution failures and help with correct exit
     } finally { fclose($out); fclose($err); }
 });
 
+test('JSON diagnostics retain the input error code when argv contains invalid UTF-8', function () {
+    $output = fopen('php://temp', 'w+');
+    $error = fopen('php://temp', 'w+');
+    try {
+        $console = new Console(output: $output, error: $error, json: true);
+        same(2, app()->run(["missing-\xff-name"], $console));
+        rewind($output);
+        $result = json_decode(stream_get_contents($output), true, flags: JSON_THROW_ON_ERROR);
+        same(2, $result['exitCode']);
+        same(true, str_starts_with($result['message'], 'unknown command: missing-'));
+        same(true, str_ends_with($result['message'], '-name'));
+        same(null, $result['data']);
+        rewind($error);
+        same('', stream_get_contents($error));
+    } finally {
+        fclose($output);
+        fclose($error);
+    }
+});
+
 test('standard enum values and custom exit codes are returned as integers', function () {
     $out = fopen('php://temp', 'w+');
     try {
@@ -104,6 +124,27 @@ test('failed result writes return a failure in text and JSON modes', function ()
     }
 });
 
+test('host warning exceptions from broken pipes use the normal result write failure path', function () {
+    [$output, $reader] = stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, STREAM_IPPROTO_IP);
+    fclose($reader);
+    $error = fopen('php://temp', 'w+');
+    set_error_handler(static function (int $severity, string $message): never {
+        throw new ErrorException($message, 0, $severity);
+    });
+    try {
+        foreach ([false, true] as $json) {
+            $console = new Console(output: $output, error: $error, json: $json);
+            same(1, app()->run(['demo', 'run'], $console));
+        }
+        rewind($error);
+        same(str_repeat('cannot write console output' . PHP_EOL, 2), stream_get_contents($error));
+    } finally {
+        restore_error_handler();
+        fclose($output);
+        fclose($error);
+    }
+});
+
 test('JSON disables interaction without entering a terminal session', function () {
     $terminal = new FakeTerminal();
     $console = new Console(output: fopen('php://temp', 'w+'), terminal: $terminal, json: true);
@@ -117,9 +158,12 @@ test('JSON disables interaction without entering a terminal session', function (
 test('JSON encoding failure reports an error without writing partial JSON', function () {
     $out = fopen('php://temp', 'w+'); $err = fopen('php://temp', 'w+'); $resource = fopen('php://temp', 'w+');
     try {
-        $app = new Application();
-        $app->addCommand(new CallbackCommand(CommandDefinition::create('run'), static fn () => CommandResult::success(data: $resource)));
-        same(1, $app->run(['run'], new Console(output: $out, error: $err, json: true)));
+        $console = new Console(output: $out, error: $err, json: true);
+        foreach ([$resource, ["name" => "\xff"]] as $data) {
+            $app = new Application();
+            $app->addCommand(new CallbackCommand(CommandDefinition::create('run'), static fn () => CommandResult::success(data: $data)));
+            same(1, $app->run(['run'], $console));
+        }
         rewind($out); same('', stream_get_contents($out));
         rewind($err); same(true, str_contains(stream_get_contents($err), 'cannot encode command result:'));
     } finally { fclose($out); fclose($err); fclose($resource); }

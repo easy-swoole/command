@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use EasySwoole\Command\Console\Color;
 use EasySwoole\Command\Console\Selection\Choice;
 use EasySwoole\Command\Console\Selection\SelectionState;
 use EasySwoole\Command\Console\Selection\SelectionRenderer;
@@ -89,6 +90,16 @@ test('selection unicode backspace exposes all matching choices', function () {
     same([3], $state->handle('enter')->values());
 });
 
+test('selection search matches visible labels instead of their color codes', function () {
+    $choices = [new Choice('a', Color::green('开发'), 1)];
+    $state = new SelectionState($choices, false);
+    foreach (['/', '开', 'enter'] as $key) { $state->handle($key); }
+    same([1], $state->handle('enter')->values());
+    $state = new SelectionState($choices, false);
+    foreach (['/', '3', '2', 'enter'] as $key) { $state->handle($key); }
+    same('cancelled', $state->handle('enter')->state);
+});
+
 test('selection search keeps hidden selections and toggles only visible choices', function () {
     $state = new SelectionState([new Choice('a', 'Alpha', 1), new Choice('b', 'Beta', 2)], true);
     foreach (['toggle', '/', 'B', 'enter', 'a'] as $key) { $state->handle($key); }
@@ -116,6 +127,25 @@ test('selection uses home end and page keys without changing selected identities
     $state->handle('pageDown'); same([2], $state->handle('enter')->values());
     $state->handle('end'); same('cancelled', $state->handle('enter')->state);
     $state->handle('home'); same([0], $state->handle('enter')->values());
+});
+
+test('selection prompts reflect search and navigation modes at each layout size', function () {
+    $renderer = new SelectionRenderer();
+    foreach ([[2, 40], [5, 35], [12, 100]] as [$rows, $columns]) {
+        $state = new SelectionState(choices(), false);
+        $state->handle('/');
+        $frame = $renderer->render('Choose', $state, $rows, $columns);
+        same(true, str_contains($frame, 'Esc Cancel | Enter Done'));
+        same(false, str_contains($frame, 'q Cancel'));
+        same(false, str_contains($frame, 'Enter Select'));
+        same(null, $state->handle('q'));
+        same('q', $state->query());
+        same(null, $state->handle('enter'));
+
+        $frame = $renderer->render('Choose', $state, $rows, $columns);
+        same(false, str_contains($frame, 'Enter Done'));
+        same(true, str_contains($frame, $rows < 8 ? 'q Cancel' : 'q/Esc Cancel'));
+    }
 });
 
 test('selection respects viewport height and keeps cancellation visible in compact layouts', function () {

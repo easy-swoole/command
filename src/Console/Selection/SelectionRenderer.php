@@ -9,6 +9,8 @@ use EasySwoole\Command\Console\Text;
 /** 只负责选择列表的布局与样式；渲染不改变游标、选中项和翻页步长。 */
 final class SelectionRenderer
 {
+    private const SEARCH_HINT = 'Esc Cancel | Enter Done';
+
     /** 事件循环显式同步可见页大小，翻页行为不依赖是否执行过绘制。 */
     public function pageSize(int $rows, int $columns): int
     {
@@ -28,7 +30,8 @@ final class SelectionRenderer
             $lines = $this->compactLines($title, $state, $available, $indices, $pageSize);
         } else {
             $start = $this->windowStart($state->cursor(), count($indices), $pageSize);
-            $lines = [$title, '↑/↓ Move  Space Toggle  a All/None  / Search  Enter Continue  q/Esc Cancel', 'Search: ' . $state->query()];
+            $hint = $this->modeHint($state, '↑/↓ Move  Space Toggle  a All/None  / Search  Enter Continue  q/Esc Cancel');
+            $lines = [$title, $hint, 'Search: ' . $state->query()];
             foreach (array_slice($indices, $start, $pageSize, true) as $position => $index) {
                 $lines[] = $this->choiceLine($state, $position, $index);
                 $lines[] = '    ' . $state->choice($index)->description;
@@ -42,12 +45,13 @@ final class SelectionRenderer
     private function compact(int $available, int $columns): bool
     { return $available < 7 || $columns < 50; }
 
-    /** 小视口省略描述并保留取消入口，仅剩一行时先展示取消键。 */
+    /** 小视口省略描述，仅剩一行时优先展示当前模式的操作提示。 */
     private function compactLines(string $title, SelectionState $state, int $available, array $indices, int $pageSize): array
     {
         $cursor = $state->cursor();
         if ($available === 1) {
-            return ['q Cancel | ' . (isset($indices[$cursor])
+            $hint = $this->modeHint($state, 'q Cancel');
+            return [$hint . ' | ' . (isset($indices[$cursor])
                 ? $this->choiceLine($state, $cursor, $indices[$cursor]) : '> Cancel')];
         }
         $lines = $available >= 3 ? [$state->searching() || $state->query() !== '' ? 'Search: ' . $state->query() : $title] : [];
@@ -55,8 +59,14 @@ final class SelectionRenderer
         foreach (array_slice($indices, $start, $pageSize, true) as $position => $index) {
             $lines[] = $this->choiceLine($state, $position, $index);
         }
-        $lines[] = ($cursor === count($indices) ? '> ' : '  ') . 'q Cancel | Enter Select';
+        $hint = $this->modeHint($state, 'q Cancel | Enter Select');
+        $lines[] = ($cursor === count($indices) ? '> ' : '  ') . $hint;
         return $lines;
+    }
+
+    private function modeHint(SelectionState $state, string $navigationHint): string
+    {
+        return $state->searching() ? self::SEARCH_HINT : $navigationHint;
     }
 
     private function windowStart(int $cursor, int $count, int $limit): int

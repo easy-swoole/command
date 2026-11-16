@@ -69,6 +69,17 @@ test('redirected ordinary output strips styles and terminal control payloads', f
 });
 
 
+test('ordinary output normalizes CRLF while filtering standalone carriage returns', function () {
+    $output = fopen('php://temp', 'w+');
+    try {
+        (new Console(output: $output))->line("first\r\nsecond\nthird\rfourth");
+        rewind($output);
+        same("first\nsecond\nthird?fourth" . PHP_EOL, stream_get_contents($output));
+    } finally {
+        fclose($output);
+    }
+});
+
 test('empty clipped colored cells do not retain invisible trailing column padding', function () {
     $plain = new TableView(['A', 'B'], [['x', '中']]);
     $colored = new TableView(['A', 'B'], [['x', Color::red('中')]]);
@@ -78,16 +89,12 @@ test('empty clipped colored cells do not retain invisible trailing column paddin
 });
 
 
-test('selection search matches visible labels instead of their color codes', function () {
-    $choices = [new \EasySwoole\Command\Console\Selection\Choice('a', Color::green('开发'), 1)];
-    $state = new \EasySwoole\Command\Console\Selection\SelectionState($choices, false);
-    foreach (['/', '开', 'enter'] as $key) { $state->handle($key); }
-    same([1], $state->handle('enter')->values());
-    $state = new \EasySwoole\Command\Console\Selection\SelectionState($choices, false);
-    foreach (['/', '3', '2', 'enter'] as $key) { $state->handle($key); }
-    same('cancelled', $state->handle('enter')->state);
+test('trailing whitespace is removed without disturbing long column padding or trailing styles', function () {
+    $line = 'short' . str_repeat(' ', 8192) . 'ready';
+    same($line, Text::trimEnd($line . " \t"));
+    same($line . "\033[0m\033[39m", Text::trimEnd($line . " \033[0m \t\033[39m "));
+    same($line . "\033[0m" . 'item', Text::trimEnd($line . "\033[0mitem"));
 });
-
 
 test('prompt uses the same color and control sequence policy as ordinary output', function () {
     $out = fopen('php://temp', 'w+');
