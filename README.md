@@ -9,7 +9,7 @@
 在自己的项目中引入 3.x 开发分支：
 
 ```sh
-composer require easyswoole/command:3.x-dev
+composer require easyswoole/command:3.x
 ```
 
 本地开发时可使用相邻的 command 仓库，见[本地依赖配置](docs/integration.md#本地依赖配置)。
